@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "FireVibe",
+    "slug": "firevibe-sparkr",
+    "scheme": "firevibe",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0B10",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.firevibe.sparkr",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Profil fotoğrafı ve galeri karesi eklemek için fotoğraflarına erişmemiz gerekiyor.",
+        "NSMicrophoneUsageDescription": "Sesli Vibe kaydı yapabilmen için mikrofonuna erişmemiz gerekiyor."
+      }
+    },
+    "android": {
+      "package": "app.firevibe.sparkr",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0B10"
+      },
+      "permissions": [
+        "READ_MEDIA_IMAGES",
+        "RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Profil fotoğrafı ve galeri karesi eklemek için fotoğraflarına erişmemiz gerekiyor."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Sesli Vibe kaydı yapabilmen için mikrofonuna erişmemiz gerekiyor."
+        }
+      ],
+      "expo-asset"
+    ],
+    "extra": {}
+  }
+}
