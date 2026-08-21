@@ -7,13 +7,17 @@ import {
   Modal,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+// The community SafeAreaView (not react-native's own) is required here - it
+// reads real inset values from the SafeAreaProvider in App.tsx and supports
+// the `edges` prop; react-native's built-in SafeAreaView is iOS-only and is
+// a no-op on Android, which would leave content under the status bar.
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 // expo-av is deprecated (since SDK 53) and will be fully removed in SDK 55 -
 // this project is on SDK 54, its last supported release. Before upgrading
@@ -24,6 +28,7 @@ import { theme } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 import { uploadRecordingUri } from '../utils/media';
+import { MUSIC_TAGS, VIBE_TAG_OPTIONS, DEFAULT_VIBE_TAGS } from '../constants/tags';
 
 const colors = theme.colors;
 const fonts = theme.fonts;
@@ -50,18 +55,6 @@ const moodImages = [
   },
 ] as const;
 
-const MUSIC_TAGS = ['Alt Pop', 'Techno', 'Indie Rock', 'R&B', 'Arabesk'];
-// A pool the user actually picks from - previously this was a fixed 3-item
-// array silently submitted for every user with no way to change it.
-const VIBE_TAG_OPTIONS = [
-  'Gece Yürüyüşü',
-  'Canlı Müzik',
-  'Spontane Plan',
-  'Kahve Sohbeti',
-  'Sanat Gecesi',
-  'Kitap Kulübü',
-];
-const DEFAULT_VIBE_TAGS = ['Gece Yürüyüşü', 'Canlı Müzik', 'Spontane Plan'];
 
 const IconButton = ({
   icon,

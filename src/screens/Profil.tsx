@@ -22,6 +22,9 @@ import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { api, ApiError } from '../api/client';
 import { pickAndUploadImage } from '../utils/media';
+import { detectCityFromLocation, LocationError } from '../utils/location';
+import { MUSIC_TAGS, VIBE_TAG_OPTIONS } from '../constants/tags';
+import RangeSlider from '../components/RangeSlider';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 const fallbackProfileImage =
@@ -75,26 +78,29 @@ function SectionHeading({
   );
 }
 
-function Tag({
+// A tappable pill from a fixed pool (see src/constants/tags.ts) - tapping
+// toggles it on/off. Replaces the old "type your own tag into a text
+// prompt" flow: free text meant two people's "aynı" tag could never
+// actually match since matching/compatibility code compares tags by exact
+// string, and it let people type anything with no moderation at all.
+function SelectableTag({
   children,
+  selected,
   backgroundColor,
   textColor,
-  borderColor,
-  onRemove,
+  onPress,
 }: {
   children: React.ReactNode;
+  selected: boolean;
   backgroundColor: string;
   textColor: string;
-  borderColor?: string;
-  onRemove: () => void;
+  onPress: () => void;
 }) {
   return (
-    <View style={[styles.tag, { backgroundColor, borderColor: borderColor || backgroundColor }]}>
+    <Pressable onPress={onPress} style={[styles.tag, { backgroundColor, borderColor: backgroundColor }]}>
+      {selected && <Icon name="check" size={12} color={textColor} />}
       <Text style={[styles.tagText, { color: textColor }]}>{children}</Text>
-      <Pressable onPress={onRemove} hitSlop={6}>
-        <Icon name="close" size={14} color={textColor} />
-      </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
@@ -105,9 +111,13 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState(user?.name ?? '');
   const [city, setCity] = useState(user?.city ?? '');
+  const [neighbourhood, setNeighbourhood] = useState(user?.neighbourhood ?? '');
+  const [detectingLocation, setDetectingLocation] = useState(false);
   const [bio, setBio] = useState(user?.bio ?? '');
   const [vibeTags, setVibeTags] = useState<string[]>(user?.vibeTags ?? []);
   const [musicTags, setMusicTags] = useState<string[]>(user?.musicTags ?? []);
+  const [ageRangeMin, setAgeRangeMin] = useState(user?.ageRangeMin ?? 18);
+  const [ageRangeMax, setAgeRangeMax] = useState(user?.ageRangeMax ?? 50);
   const [visible, setVisible] = useState(user?.visible ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,25 +154,13 @@ export default function EditProfileScreen() {
     closePrompt();
   };
 
-  const removeVibeTag = (tag: string) => setVibeTags((prev) => prev.filter((t) => t !== tag));
-  const removeMusicTag = (tag: string) => setMusicTags((prev) => prev.filter((t) => t !== tag));
-
-  const addVibeTag = () => {
-    openPrompt({
-      title: 'Etiket ekle',
-      message: 'Gece imzana yeni bir etiket ekle.',
-      placeholder: 'ör. Retro Synth',
-      onSubmit: (value) => setVibeTags((prev) => (prev.includes(value) ? prev : [...prev, value])),
-    });
+  // Both tag pools are fixed lists now (see src/constants/tags.ts) - tapping
+  // a pill toggles membership instead of typing free text into a prompt.
+  const toggleVibeTag = (tag: string) => {
+    setVibeTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   };
-
-  const addMusicTag = () => {
-    openPrompt({
-      title: 'Müzik zevkini ekle',
-      message: 'Bu gece dinlediğin bir tür ya da sanatçı ekle.',
-      placeholder: 'ör. Türkçe Rap',
-      onSubmit: (value) => setMusicTags((prev) => (prev.includes(value) ? prev : [...prev, value])),
-    });
+  const toggleMusicTag = (tag: string) => {
+    setMusicTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   };
 
   const saveField = async (patch: Record<string, unknown>, key: string) => {
@@ -176,24 +174,18 @@ export default function EditProfileScreen() {
     }
   };
 
-  const editAgeRange = () => {
-    openPrompt({
-      title: 'Yaş aralığı',
-      message: 'Keşifte kimleri görmek istediğini "min-maks" olarak yaz (ör. 22-35).',
-      placeholder: '22-35',
-      keyboardType: 'numeric',
-      initialValue: `${user.ageRangeMin}-${user.ageRangeMax}`,
-      onSubmit: (value) => {
-        const [minStr, maxStr] = value.split(/[^0-9]+/).filter(Boolean);
-        const min = Number(minStr);
-        const max = Number(maxStr);
-        if (!Number.isFinite(min) || !Number.isFinite(max) || min < 18 || max > 99 || min >= max) {
-          Alert.alert('Geçersiz aralık', 'Lütfen 18-99 arası, küçükten büyüğe bir aralık gir (ör. 22-35).');
-          return;
-        }
-        saveField({ ageRangeMin: min, ageRangeMax: max }, 'ageRange');
-      },
-    });
+  // Drag-slider replacement for the old "type min-max as text" flow (see
+  // RangeSlider below in the render). onChange keeps the on-screen label
+  // live while dragging; onChangeEnd is the point where we actually persist
+  // to the backend, so a single drag doesn't fire dozens of API calls.
+  const handleAgeRangeChange = (min: number, max: number) => {
+    setAgeRangeMin(min);
+    setAgeRangeMax(max);
+  };
+  const handleAgeRangeCommit = (min: number, max: number) => {
+    setAgeRangeMin(min);
+    setAgeRangeMax(max);
+    saveField({ ageRangeMin: min, ageRangeMax: max }, 'ageRange');
   };
 
   const editRadius = () => {
@@ -270,6 +262,24 @@ export default function EditProfileScreen() {
     }
   };
 
+  // Fills the "Şehir" (and "Semt") fields from the device's real GPS
+  // position - see src/utils/location.ts. Only updates local form state;
+  // the user still has to hit "Kaydet" like any other field, and can edit
+  // the detected value by hand afterwards if it's slightly off.
+  const handleDetectLocation = async () => {
+    setDetectingLocation(true);
+    setError(null);
+    try {
+      const detected = await detectCityFromLocation();
+      setCity(detected.city);
+      if (detected.neighbourhood) setNeighbourhood(detected.neighbourhood);
+    } catch (err) {
+      Alert.alert('Konum bulunamadı', err instanceof LocationError ? err.message : 'Bir şeyler ters gitti, tekrar dene.');
+    } finally {
+      setDetectingLocation(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       setError('Adını boş bırakamazsın.');
@@ -281,6 +291,7 @@ export default function EditProfileScreen() {
       await updateUser({
         name: name.trim(),
         city: city.trim(),
+        neighbourhood: neighbourhood.trim(),
         bio: bio.slice(0, 120),
         vibeTags,
         musicTags,
@@ -369,8 +380,20 @@ export default function EditProfileScreen() {
             <Icon name="shield-check-outline" size={19} color={colors.success} />
             <Text style={styles.noticeText}>
               <Text style={styles.successText}>{user.verified ? 'Doğrulanmış profil' : 'Doğrulanmamış profil'}</Text> ·
-              {' '}Topluluğa gerçek bir insan olduğunu gösteriyorsun.
+              {' '}
+              {user.verified
+                ? 'Topluluğa gerçek bir insan olduğunu gösteriyorsun.'
+                : 'Bir selfie çekerek doğrulanmış rozetini aç.'}
             </Text>
+            {!user.verified && (
+              <Pressable
+                accessibilityLabel="Profilini doğrula"
+                style={styles.verifyLink}
+                onPress={() => navigation.navigate('SelfieVerify')}
+              >
+                <Text style={styles.verifyLinkText}>Doğrula</Text>
+              </Pressable>
+            )}
           </View>
         </Section>
 
@@ -408,7 +431,24 @@ export default function EditProfileScreen() {
 
             <View style={styles.twoColumns}>
               <View style={styles.column}>
-                <Text style={styles.label}>Şehir</Text>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Şehir</Text>
+                  <Pressable
+                    accessibilityLabel="Konumu kullanarak şehri bul"
+                    onPress={handleDetectLocation}
+                    disabled={detectingLocation}
+                    style={styles.detectLocationLink}
+                  >
+                    {detectingLocation ? (
+                      <ActivityIndicator size="small" color={colors.secondary} />
+                    ) : (
+                      <>
+                        <Icon name="crosshairs-gps" size={13} color={colors.secondary} />
+                        <Text style={styles.detectLocationText}>Konumu bul</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
                 <View style={styles.inputWrap}>
                   <Icon name="map-marker-outline" size={18} color={colors.secondary} />
                   <TextInput
@@ -429,46 +469,69 @@ export default function EditProfileScreen() {
                 </View>
               </View>
             </View>
+
+            <Text style={styles.label}>Semt</Text>
+            <View style={styles.inputWrap}>
+              <Icon name="map-outline" size={18} color={colors.secondary} />
+              <TextInput
+                value={neighbourhood}
+                onChangeText={setNeighbourhood}
+                style={styles.input}
+                accessibilityLabel="Semt"
+                placeholder="ör. Kadıköy"
+                placeholderTextColor={colors.mutedForeground}
+              />
+            </View>
           </View>
         </Section>
 
         <Section>
-          <SectionHeading eyebrow="GECE İMZAN" title="Vibe etiketlerin" action="Ekle" onAction={addVibeTag} />
+          <SectionHeading eyebrow="GECE İMZAN" title="Vibe etiketlerin" />
+          <Text style={styles.tagHint}>Sana uyanları seç, istediğin kadar işaretleyebilirsin.</Text>
           <View style={styles.tags}>
-            {vibeTags.map((tag, i) => (
-              <Tag
-                key={tag}
-                backgroundColor={[colors.primary, colors.secondary, colors.accent][i % 3]}
-                textColor={[colors.primaryForeground, colors.secondaryForeground, colors.accentForeground][i % 3]}
-                onRemove={() => removeVibeTag(tag)}
-              >
-                {tag}
-              </Tag>
-            ))}
-            <Pressable style={styles.addTag} onPress={addVibeTag}>
-              <Icon name="plus" size={15} color={colors.mutedForeground} />
-              <Text style={styles.addTagText}>Etiket ekle</Text>
-            </Pressable>
+            {VIBE_TAG_OPTIONS.map((tag, i) => {
+              const selected = vibeTags.includes(tag);
+              return (
+                <SelectableTag
+                  key={tag}
+                  selected={selected}
+                  backgroundColor={selected ? [colors.primary, colors.secondary, colors.accent][i % 3] : colors.muted}
+                  textColor={
+                    selected
+                      ? [colors.primaryForeground, colors.secondaryForeground, colors.accentForeground][i % 3]
+                      : colors.mutedForeground
+                  }
+                  onPress={() => toggleVibeTag(tag)}
+                >
+                  {tag}
+                </SelectableTag>
+              );
+            })}
           </View>
         </Section>
 
         <Section>
-          <SectionHeading eyebrow="SESİN" title="Bu gece ne çalıyor?" action="Ekle" onAction={addMusicTag} />
+          <SectionHeading eyebrow="SESİN" title="Bu gece ne çalıyor?" />
+          <Text style={styles.tagHint}>Sana uyanları seç, istediğin kadar işaretleyebilirsin.</Text>
           <View style={styles.tags}>
-            {musicTags.map((tag, i) => (
-              <Tag
-                key={tag}
-                backgroundColor={[colors.primary, colors.secondary, colors.muted][i % 3]}
-                textColor={[colors.primaryForeground, colors.secondaryForeground, colors.mutedForeground][i % 3]}
-                onRemove={() => removeMusicTag(tag)}
-              >
-                {tag}
-              </Tag>
-            ))}
-            <Pressable style={styles.addTag} onPress={addMusicTag}>
-              <Icon name="plus" size={15} color={colors.mutedForeground} />
-              <Text style={styles.addTagText}>Ekle</Text>
-            </Pressable>
+            {MUSIC_TAGS.map((tag, i) => {
+              const selected = musicTags.includes(tag);
+              return (
+                <SelectableTag
+                  key={tag}
+                  selected={selected}
+                  backgroundColor={selected ? [colors.primary, colors.secondary, colors.muted][i % 3] : colors.muted}
+                  textColor={
+                    selected
+                      ? [colors.primaryForeground, colors.secondaryForeground, colors.mutedForeground][i % 3]
+                      : colors.mutedForeground
+                  }
+                  onPress={() => toggleMusicTag(tag)}
+                >
+                  {tag}
+                </SelectableTag>
+              );
+            })}
           </View>
 
           <View style={styles.moodCard}>
@@ -504,15 +567,36 @@ export default function EditProfileScreen() {
 
         <Section>
           <SectionHeading eyebrow="KEŞİF AYARLARI" title="Seni kimler görsün?" icon="tune-variant" />
-          <View style={styles.twoColumns}>
-            <InfoTile
-              icon="account-group-outline"
-              color={colors.primary}
-              label="Yaş aralığı"
-              value={`${user.ageRangeMin}–${user.ageRangeMax}`}
-              onPress={editAgeRange}
-              busy={savingField === 'ageRange'}
+
+          <View style={styles.rangeCard}>
+            <View style={styles.rangeHeader}>
+              <View style={[styles.tileIcon, { backgroundColor: colors.primary }]}>
+                <Icon name="account-group-outline" size={17} color={colors.foreground} />
+              </View>
+              <Text style={styles.rangeLabel}>Yaş aralığı</Text>
+              {savingField === 'ageRange' ? (
+                <ActivityIndicator size="small" color={colors.foreground} />
+              ) : (
+                <Text style={styles.rangeValue}>
+                  {ageRangeMin}–{ageRangeMax}
+                </Text>
+              )}
+            </View>
+            <RangeSlider
+              min={18}
+              max={50}
+              valueMin={ageRangeMin}
+              valueMax={ageRangeMax}
+              onChange={handleAgeRangeChange}
+              onChangeEnd={handleAgeRangeCommit}
             />
+            <View style={styles.rangeBounds}>
+              <Text style={styles.rangeBoundText}>18</Text>
+              <Text style={styles.rangeBoundText}>50</Text>
+            </View>
+          </View>
+
+          <View style={styles.twoColumns}>
             <InfoTile
               icon="map-marker-outline"
               color={colors.secondary}
@@ -544,13 +628,8 @@ export default function EditProfileScreen() {
             icon="shield-outline"
             color={colors.secondary}
             title="Güvenlik merkezi"
-            subtitle="Gizlilik ve hesap kontrolleri"
-            onPress={() =>
-              Alert.alert(
-                'Güvenlik merkezi',
-                'Ayrı bir güvenlik merkezi ekranı bu demoda yok - engelleme, şikayet ve hesap silme aksiyonlarını aşağıdaki "Hassas kontroller" bölümünden yönetebilirsin.'
-              )
-            }
+            subtitle="KVKK, topluluk ilkeleri ve hesap silme"
+            onPress={() => navigation.navigate('Security')}
           />
           <View style={styles.separator} />
 
@@ -935,6 +1014,18 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontWeight: '800',
   },
+  verifyLink: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+  },
+  verifyLinkText: {
+    color: colors.primaryForeground,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    fontWeight: '800',
+  },
   headingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -970,6 +1061,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     marginTop: 6,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  detectLocationLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 20,
+  },
+  detectLocationText: {
+    color: colors.secondary,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    fontWeight: '700',
   },
   inputWrap: {
     minHeight: 49,
@@ -1029,11 +1137,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  tagHint: {
+    marginTop: 10,
+    color: colors.mutedForeground,
+    fontFamily: fonts.body,
+    fontSize: 12,
+  },
   tags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 16,
+    marginTop: 12,
   },
   tag: {
     flexDirection: 'row',
@@ -1045,23 +1159,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   tagText: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  addTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-  },
-  addTagText: {
-    color: colors.mutedForeground,
     fontFamily: fonts.body,
     fontSize: 12,
     fontWeight: '800',
@@ -1123,6 +1220,43 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 12,
     marginTop: 12,
+  },
+  rangeCard: {
+    marginTop: 16,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: colors.muted,
+  },
+  rangeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  rangeLabel: {
+    flex: 1,
+    color: colors.mutedForeground,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  rangeValue: {
+    color: colors.foreground,
+    fontFamily: fonts.heading,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  rangeBounds: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: -4,
+    paddingHorizontal: 2,
+  },
+  rangeBoundText: {
+    color: colors.mutedForeground,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    fontWeight: '700',
   },
   infoTile: {
     flex: 1,

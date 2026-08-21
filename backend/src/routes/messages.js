@@ -2,6 +2,8 @@ const db = require('../db');
 const { requireAuth } = require('../auth');
 const { loadMyMatch } = require('./matches');
 const { otherUserId } = require('../matching');
+const { notifyUser } = require('../push');
+const { containsBlockedText } = require('../moderation');
 
 // Ephemeral (non-persisted) "is typing" state, keyed by matchId.
 const typingState = new Map();
@@ -69,6 +71,15 @@ routes.push({
     const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl : '';
     if (!text && !imageUrl) return res.status(400).json({ error: 'Mesaj boş olamaz' });
 
+    // Text half of the same content-moderation pass as images/voice notes
+    // (see ../moderation.js) - free to run (no external API), so it applies
+    // even though only voice/image moderation was explicitly requested.
+    // Images sent as `imageUrl` were already checked at upload time in
+    // routes/uploads.js, before this endpoint ever sees the URL.
+    if (text && containsBlockedText(text)) {
+      return res.status(422).json({ error: 'Bu mesaj küfür veya cinsel içerik barındırdığı için gönderilemedi.' });
+    }
+
     const row = db.insert('messages', {
       matchId: match.id,
       senderId: userId,
@@ -78,6 +89,7 @@ routes.push({
 
     const otherId = otherUserId(match, userId);
     const other = db.findById('users', otherId);
+    const sender = db.findById('users', userId);
 
     if (other && other.isBot) {
       typingState.set(match.id, { userId: other.id, until: Date.now() + 1600 });
@@ -85,7 +97,20 @@ routes.push({
         const reply = BOT_REPLIES[Math.floor(Math.random() * BOT_REPLIES.length)];
         db.insert('messages', { matchId: match.id, senderId: other.id, text: reply, imageUrl: null });
         typingState.delete(match.id);
+        // The bot "sent" this reply to the human - let them know if the app
+        // isn't open, same as a real person's message would.
+        notifyUser(userId, {
+          title: other.name,
+          body: reply,
+          data: { type: 'message', matchId: match.id },
+        }).catch(() => {});
       }, 1400 + Math.random() * 1200);
+    } else if (other) {
+      notifyUser(other.id, {
+        title: sender ? sender.name : 'Yeni mesaj',
+        body: text || (imageUrl ? 'Bir fotoğraf gönderdi 📷' : 'Yeni mesaj'),
+        data: { type: 'message', matchId: match.id },
+      }).catch(() => {});
     }
 
     res.status(201).json({ message: serializeMessage(row) });

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "SparkR (FireVibe) backend API - auth, matching, chat. Zero external dependencies (Node.js built-ins only).",
+  "main": "src/server.js",
   "type": "commonjs",
   "engines": {
     "node": ">=18"

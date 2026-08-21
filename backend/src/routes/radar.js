@@ -1,6 +1,6 @@
 const db = require('../db');
 const { requireAuth } = require('../auth');
-const { toPublicUser } = require('../serialize');
+const { toPublicProfile } = require('../serialize');
 const { isBlockedEitherWay } = require('./safety');
 
 const routes = [];
@@ -15,7 +15,7 @@ routes.push({
       .filter('users', (u) => u.id !== userId && u.visible !== false && !isBlockedEitherWay(userId, u.id))
       .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
       .slice(0, 12);
-    res.json({ nearby: rows.map(toPublicUser), activeCount: rows.length + 34 });
+    res.json({ nearby: rows.map(toPublicProfile), activeCount: rows.length + 34 });
   },
 });
 

@@ -4,18 +4,22 @@ import {
   Alert,
   Image,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+// The community SafeAreaView (not react-native's own) is required here - it
+// reads real inset values from the SafeAreaProvider in App.tsx and supports
+// the `edges` prop; react-native's built-in SafeAreaView is iOS-only and is
+// a no-op on Android, which would leave content under the status bar.
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../theme';
 import { api, ApiError } from '../api/client';
-import type { FireHour, Match, User } from '../api/types';
+import type { FireHour, Match, PublicProfile } from '../api/types';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import MainTabBar from '../components/MainTabBar';
 
@@ -68,7 +72,7 @@ function timeAgo(iso: string): string {
 export default function VibeRadarScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [matches, setMatches] = useState<Match[]>([]);
-  const [nearby, setNearby] = useState<User[]>([]);
+  const [nearby, setNearby] = useState<PublicProfile[]>([]);
   const [fireHour, setFireHour] = useState<FireHour | null>(null);
   const [activeCount, setActiveCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -212,7 +216,11 @@ export default function VibeRadarScreen() {
             ) : (
               <View style={styles.peopleRow}>
                 {nearby.map((person, i) => (
-                  <View key={person.id} style={styles.person}>
+                  <Pressable
+                    key={person.id}
+                    style={styles.person}
+                    onPress={() => navigation.navigate('ViewProfile', { userId: person.id })}
+                  >
                     <Avatar
                       uri={person.avatarUrl}
                       size={68}
@@ -223,7 +231,7 @@ export default function VibeRadarScreen() {
                     <Text style={[styles.personLabel, { color: [theme.colors.primary, theme.colors.secondary, theme.colors.accent][i % 3] }]}>
                       {person.mood}
                     </Text>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             )}
@@ -287,11 +295,16 @@ export default function VibeRadarScreen() {
                     onLongPress={() => handleMatchLongPress(match)}
                     style={[styles.conversation, index < matches.length - 1 && styles.conversationBorder]}
                   >
-                    <Avatar
-                      uri={match.otherUser.avatarUrl}
-                      size={54}
-                      ringColor={[theme.colors.primary, theme.colors.secondary, theme.colors.accent][index % 3]}
-                    />
+                    <Pressable
+                      accessibilityLabel={`${match.otherUser.name} profilini gör`}
+                      onPress={() => navigation.navigate('ViewProfile', { userId: match.otherUser.id })}
+                    >
+                      <Avatar
+                        uri={match.otherUser.avatarUrl}
+                        size={54}
+                        ringColor={[theme.colors.primary, theme.colors.secondary, theme.colors.accent][index % 3]}
+                      />
+                    </Pressable>
                     <View style={styles.conversationBody}>
                       <View style={styles.conversationTop}>
                         <Text style={styles.conversationName}>{match.otherUser.name}</Text>

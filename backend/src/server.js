@@ -18,6 +18,7 @@ const messageRoutes = require('./routes/messages');
 const radarRoutes = require('./routes/radar');
 const uploadRoutes = require('./routes/uploads');
 const { routes: safetyRoutes } = require('./routes/safety');
+const subscriptionRoutes = require('./routes/subscription');
 
 const routeTable = [
   ...authRoutes,
@@ -28,6 +29,7 @@ const routeTable = [
   ...radarRoutes,
   ...uploadRoutes,
   ...safetyRoutes,
+  ...subscriptionRoutes,
 ].map((route) => ({ ...route, match: compilePattern(route.path) }));
 
 const UPLOAD_MIME_BY_EXT = {
@@ -116,8 +118,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   const url = new URL(req.url, 'http://localhost');
-  const pathname = decodeURIComponent(url.pathname);
-  const pathSegments = pathname.split('/').filter(Boolean);
+  const pathSegments = decodeURIComponent(url.pathname).split('/').filter(Boolean);
+  // Normalized to a single canonical form (no trailing slash, no doubled
+  // slashes) BEFORE any exact-string matching happens below. Route matching
+  // itself only ever looks at pathSegments (see compilePattern), so it was
+  // already immune to "/api/auth/login/" vs "/api/auth/login" - but the
+  // rate-limit check and the two early-return routes below used to compare
+  // the raw pathname directly, so a trailing/doubled slash reached the real
+  // login/OTP handler while silently skipping the strict rate limiter (it
+  // fell through to the ~30x more permissive general one instead).
+  const pathname = '/' + pathSegments.join('/');
   const query = Object.fromEntries(url.searchParams.entries());
 
   if (req.method === 'GET' && pathname === '/api/health') {

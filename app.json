@@ -13,7 +13,8 @@
       "bundleIdentifier": "app.firevibe.sparkr",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Profil fotoğrafı ve galeri karesi eklemek için fotoğraflarına erişmemiz gerekiyor.",
-        "NSMicrophoneUsageDescription": "Sesli Vibe kaydı yapabilmen için mikrofonuna erişmemiz gerekiyor."
+        "NSMicrophoneUsageDescription": "Sesli Vibe kaydı yapabilmen için mikrofonuna erişmemiz gerekiyor.",
+        "NSLocationWhenInUseUsageDescription": "Profilindeki şehir/semt bilgisini otomatik doldurabilmemiz için konumuna erişmemiz gerekiyor."
       }
     },
     "android": {
@@ -21,10 +22,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#0B0B10"
       },
-      "permissions": [
-        "READ_MEDIA_IMAGES",
-        "RECORD_AUDIO"
-      ]
+      "permissions": ["READ_MEDIA_IMAGES", "RECORD_AUDIO", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "web": {
       "bundler": "metro"
@@ -33,7 +31,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Profil fotoğrafı ve galeri karesi eklemek için fotoğraflarına erişmemiz gerekiyor."
+          "photosPermission": "Profil fotoğrafı ve galeri karesi eklemek için fotoğraflarına erişmemiz gerekiyor.",
+          "cameraPermission": "Selfie doğrulaması için kameranıza erişmemiz gerekiyor."
         }
       ],
       [
@@ -42,6 +41,13 @@
           "microphonePermission": "Sesli Vibe kaydı yapabilmen için mikrofonuna erişmemiz gerekiyor."
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Profilindeki şehir/semt bilgisini otomatik doldurabilmemiz için konumuna erişmemiz gerekiyor."
+        }
+      ],
+      "expo-notifications",
       "expo-asset"
     ],
     "extra": {}

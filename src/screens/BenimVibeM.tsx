@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+// The community SafeAreaView (not react-native's own) is required here - it
+// reads real inset values from the SafeAreaProvider in App.tsx and supports
+// the `edges` prop; react-native's built-in SafeAreaView is iOS-only and is
+// a no-op on Android, which would leave content under the status bar.
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';

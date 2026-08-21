@@ -1,5 +1,5 @@
 const db = require('./db');
-const { toPublicUser } = require('./serialize');
+const { toPublicProfile } = require('./serialize');
 
 const ICEBREAKERS = [
   'Geceyi uzatan tek şarkı hangisi?',
@@ -21,6 +21,9 @@ function otherUserId(match, myId) {
   return match.userAId === myId ? match.userBId : match.userAId;
 }
 
+// Returns { match, isNew } - callers that need to push-notify the OTHER
+// person about a fresh match (see routes/discovery.js) only want to do that
+// when isNew is true, never when two people re-swipe an existing match.
 function findOrCreateMatch(userA, userB, score) {
   const [a, b] = userA.id < userB.id ? [userA, userB] : [userB, userA];
 
@@ -28,7 +31,7 @@ function findOrCreateMatch(userA, userB, score) {
     'matches',
     (m) => m.userAId === a.id && m.userBId === b.id
   );
-  if (existing) return existing;
+  if (existing) return { match: existing, isNew: false };
 
   const question = ICEBREAKERS[Math.floor(Math.random() * ICEBREAKERS.length)];
   const botUser = a.isBot ? a : b.isBot ? b : null;
@@ -52,7 +55,7 @@ function findOrCreateMatch(userA, userB, score) {
     });
   }
 
-  return match;
+  return { match, isNew: true };
 }
 
 function serializeMatch(match, myId) {
@@ -73,7 +76,7 @@ function serializeMatch(match, myId) {
       answerMine: iAmA ? match.icebreakerAnswerA : match.icebreakerAnswerB,
       answerTheirs: iAmA ? match.icebreakerAnswerB : match.icebreakerAnswerA,
     },
-    otherUser: toPublicUser(otherRow),
+    otherUser: toPublicProfile(otherRow),
     lastMessage: lastMessage
       ? {
           text: lastMessage.text,

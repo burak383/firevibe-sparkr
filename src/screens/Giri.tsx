@@ -13,6 +13,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+// `edges={['bottom']}` (see below) intentionally excludes the top edge so
+// the full-bleed hero image can still bleed under the status bar, matching
+// the same pattern KayTOl.tsx (Register) already uses; only the bottom -
+// where the form and submit button live - needs to clear the home
+// indicator.
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -136,7 +142,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView style={styles.screen} edges={['bottom']}>
+      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -404,7 +411,8 @@ export default function LoginScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

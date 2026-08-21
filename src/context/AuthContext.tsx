@@ -13,6 +13,7 @@ interface AuthContextValue {
   refreshUser: () => Promise<User | null>;
   updateUser: (patch: Record<string, unknown>) => Promise<User>;
   completeVibeSetup: (patch: Record<string, unknown>) => Promise<User>;
+  verifySelfie: (selfieUrl: string) => Promise<User>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -75,6 +76,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    try {
+      // Best effort - clear this device's push registration so a shared or
+      // reused device doesn't keep notifying whoever just logged out.
+      // Must happen before the token is cleared below (needs auth).
+      await api.registerPushToken('');
+    } catch {
+      // Not worth blocking logout over - a stale token just means a future
+      // push might not reach this device, not a broken login flow.
+    }
     await setToken(null);
     setUser(null);
   }, []);
@@ -101,6 +111,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return updated;
   }, []);
 
+  const verifySelfie = useCallback(async (selfieUrl: string) => {
+    const { user: updated } = await api.verifySelfie(selfieUrl);
+    setUser(updated);
+    return updated;
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -113,6 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshUser,
       updateUser,
       completeVibeSetup,
+      verifySelfie,
     }),
     [
       user,
@@ -125,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshUser,
       updateUser,
       completeVibeSetup,
+      verifySelfie,
     ]
   );
 

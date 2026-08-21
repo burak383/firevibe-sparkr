@@ -26,10 +26,22 @@ export const isGoogleSignInConfigured = Boolean(
  * 'success' (see Giri.tsx for the pattern; the exact field the token lands
  * in - `authentication.idToken` vs `params.id_token` - depends on the
  * provider version, so callers should check both).
+ *
+ * IMPORTANT: this hook runs unconditionally on every render of the Login/
+ * Register screens (hooks can't be called conditionally), even when Google
+ * sign-in isn't configured. `Google.useAuthRequest` throws synchronously -
+ * crashing the whole screen - if the client id for the *current platform*
+ * is missing (e.g. "Client Id property `androidClientId` must be defined
+ * to use Google auth on this platform" on Android), so we always pass a
+ * non-empty placeholder instead of `undefined` when a real id isn't set.
+ * This only satisfies that internal validation - it never makes a network
+ * request by itself. The actual gate against attempting a real sign-in is
+ * `isGoogleSignInConfigured`, checked in each screen's button handler
+ * before `promptAsync()` is ever called.
  */
 export function useGoogleAuthRequest() {
   return Google.useAuthRequest({
-       iosClientId: GOOGLE_IOS_CLIENT_ID || 'not-configured',
+    iosClientId: GOOGLE_IOS_CLIENT_ID || 'not-configured',
     androidClientId: GOOGLE_ANDROID_CLIENT_ID || 'not-configured',
     webClientId: GOOGLE_WEB_CLIENT_ID || 'not-configured',
     scopes: ['profile', 'email'],

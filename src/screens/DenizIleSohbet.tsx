@@ -90,6 +90,7 @@ export default function DenizChatScreen() {
   const fetchMessages = useCallback(async () => {
     try {
       const res = await api.messages(matchId);
+      setError(null); // a poll just succeeded - clear any earlier "sohbet yüklenemedi"/404 banner
       setMessages(res.messages);
       setOtherTyping(res.otherTyping);
       const lastId = res.messages[res.messages.length - 1]?.id ?? 0;
@@ -135,6 +136,7 @@ export default function DenizChatScreen() {
     setText('');
     try {
       await api.sendMessage(matchId, trimmed);
+      setError(null); // a send just succeeded - clear any earlier "mesaj gönderilemedi" banner
       await fetchMessages();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Mesaj gönderilemedi.');
@@ -255,22 +257,28 @@ export default function DenizChatScreen() {
               <Icon name="arrow-left" color={colors.cardForeground} />
             </Pressable>
 
-            <Avatar uri={other.avatarUrl} size={48} online style={styles.profileAvatar} />
+            <Pressable
+              style={styles.headerIdentityPress}
+              accessibilityLabel={`${other.name} profilini gör`}
+              onPress={() => navigation.navigate('ViewProfile', { userId: other.id })}
+            >
+              <Avatar uri={other.avatarUrl} size={48} online style={styles.profileAvatar} />
 
-            <View style={styles.headerIdentity}>
-              <View style={styles.nameRow}>
-                <Text numberOfLines={1} style={styles.name}>
-                  {other.name}
-                </Text>
-                <View style={styles.matchBadge}>
-                  <Text style={styles.matchText}>%{match.compatibility} Vibe Match</Text>
+              <View style={styles.headerIdentity}>
+                <View style={styles.nameRow}>
+                  <Text numberOfLines={1} style={styles.name}>
+                    {other.name}
+                  </Text>
+                  <View style={styles.matchBadge}>
+                    <Text style={styles.matchText}>%{match.compatibility} Vibe Match</Text>
+                  </View>
+                </View>
+                <View style={styles.activeRow}>
+                  <View style={styles.activeDot} />
+                  <Text style={styles.activeText}>{otherTyping ? `${other.name} yazıyor...` : 'Aktif şimdi'}</Text>
                 </View>
               </View>
-              <View style={styles.activeRow}>
-                <View style={styles.activeDot} />
-                <Text style={styles.activeText}>{otherTyping ? `${other.name} yazıyor...` : 'Aktif şimdi'}</Text>
-              </View>
-            </View>
+            </Pressable>
 
             <Pressable accessibilityLabel="Daha fazla seçenek" style={styles.roundButton} onPress={() => setMenuOpen((v) => !v)}>
               <Icon name="dots-vertical" color={colors.mutedForeground} />
@@ -284,7 +292,7 @@ export default function DenizChatScreen() {
                 style={styles.menuItem}
                 onPress={() => {
                   setMenuOpen(false);
-                  Alert.alert(other.name, other.bio || 'Profil bilgisi yok.');
+                  navigation.navigate('ViewProfile', { userId: other.id });
                 }}
               >
                 <Icon name="account-circle-outline" size={18} color={colors.secondary} />
@@ -486,6 +494,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.card,
   },
+  headerIdentityPress: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerIdentity: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { color: colors.foreground, fontFamily: fonts.heading, fontSize: 18, fontWeight: '700' },

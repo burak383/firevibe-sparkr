@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { DeckUser, FireHour, Match, Message, User } from './types';
+import type { DeckUser, FireHour, Match, Message, PublicProfile, SwipeStatus, User } from './types';
 
 // Point this at your backend. For a physical device or Android emulator,
 // `localhost` won't reach your computer - set EXPO_PUBLIC_API_URL in a `.env`
@@ -114,10 +114,21 @@ export const api = {
 
   deleteAccount: () => request<{ ok: boolean }>('/api/users/me', { method: 'DELETE' }),
 
+  // See SelfieDogrulama.tsx - `selfieUrl` comes from takeAndUploadSelfie(),
+  // which forces the front camera rather than the photo library.
+  verifySelfie: (selfieUrl: string) =>
+    request<{ user: User }>('/api/users/me/verify-selfie', { method: 'POST', body: { selfieUrl } }),
+
   deck: () => request<{ deck: DeckUser[] }>('/api/discovery/deck'),
 
+  // `swipeStatus` is only populated for 'like'/'superlike' (a 'pass' never
+  // touches the daily limit at all, so the backend sends null for it) - see
+  // backend/src/routes/discovery.js.
   swipe: (targetUserId: number, action: 'like' | 'pass' | 'superlike') =>
-    request<{ match: Match | null }>('/api/discovery/swipe', { method: 'POST', body: { targetUserId, action } }),
+    request<{ match: Match | null; swipeStatus: SwipeStatus | null }>('/api/discovery/swipe', {
+      method: 'POST',
+      body: { targetUserId, action },
+    }),
 
   matches: () => request<{ matches: Match[] }>('/api/matches'),
 
@@ -136,7 +147,11 @@ export const api = {
       body: { text, imageUrl },
     }),
 
-  nearby: () => request<{ nearby: User[]; activeCount: number }>('/api/radar/nearby'),
+  nearby: () => request<{ nearby: PublicProfile[]; activeCount: number }>('/api/radar/nearby'),
+
+  // Backs every "view this person's profile" tap - the deck's "Profili aç",
+  // a match's "Profili Gör", radar's nearby avatars (see ProfilGoruntule.tsx).
+  userProfile: (userId: number) => request<{ user: PublicProfile }>(`/api/users/${userId}`),
 
   fireHour: () => request<FireHour>('/api/radar/fire-hour'),
 
@@ -167,11 +182,17 @@ export const api = {
       auth: false,
     }),
 
+  // An empty string clears the registration (called on logout - see
+  // AuthContext.logout - so a device that switches accounts stops pushing
+  // notifications meant for the previous one).
+  registerPushToken: (token: string) =>
+    request<{ ok: boolean }>('/api/users/push-token', { method: 'POST', body: { token } }),
+
   blockUser: (userId: number) => request<{ ok: boolean }>('/api/safety/block', { method: 'POST', body: { userId } }),
 
   unblockUser: (userId: number) => request<{ ok: boolean }>(`/api/safety/block/${userId}`, { method: 'DELETE' }),
 
-  blockedUsers: () => request<{ blocked: { blockId: number; user: User }[] }>('/api/safety/blocked'),
+  blockedUsers: () => request<{ blocked: { blockId: number; user: PublicProfile }[] }>('/api/safety/blocked'),
 
   reportUser: (userId: number, reason?: string) =>
     request<{ ok: boolean }>('/api/safety/report', { method: 'POST', body: { userId, reason } }),

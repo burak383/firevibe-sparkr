@@ -1,6 +1,9 @@
 const db = require('../db');
 const { requireAuth } = require('../auth');
-const { toPublicUser } = require('../serialize');
+const { toPublicUser, toPublicProfile } = require('../serialize');
+const { isBlockedEitherWay } = require('./safety');
+const { isExpoPushToken } = require('../push');
+const { containsBlockedText } = require('../moderation');
 
 const MOODS = ['Chill', 'Party', 'Deep Talk', 'Adrenaline'];
 
@@ -12,14 +15,53 @@ function buildPatch(body) {
   }
   if (body.mood && MOODS.includes(body.mood)) patch.mood = body.mood;
   if (typeof body.visible === 'boolean') patch.visible = body.visible;
-  if (Number.isFinite(body.ageRangeMin)) patch.ageRangeMin = Math.round(body.ageRangeMin);
-  if (Number.isFinite(body.ageRangeMax)) patch.ageRangeMax = Math.round(body.ageRangeMax);
+  // Clamp to the same 18-50 bounds the mobile app's drag slider enforces -
+  // defense in depth in case a request ever reaches this endpoint some
+  // other way than that slider (an older client build, a direct API call).
+  if (Number.isFinite(body.ageRangeMin)) {
+    patch.ageRangeMin = Math.min(50, Math.max(18, Math.round(body.ageRangeMin)));
+  }
+  if (Number.isFinite(body.ageRangeMax)) {
+    patch.ageRangeMax = Math.min(50, Math.max(18, Math.round(body.ageRangeMax)));
+  }
+  if (
+    typeof patch.ageRangeMin === 'number' &&
+    typeof patch.ageRangeMax === 'number' &&
+    patch.ageRangeMin > patch.ageRangeMax
+  ) {
+    // Only one bound was likely dragged past the other in a single request -
+    // keep them from inverting rather than rejecting the whole save.
+    const mid = patch.ageRangeMin;
+    patch.ageRangeMin = patch.ageRangeMax;
+    patch.ageRangeMax = mid;
+  }
   if (Number.isFinite(body.discoveryRadiusKm)) patch.discoveryRadiusKm = Math.round(body.discoveryRadiusKm);
   if (Array.isArray(body.gallery)) patch.gallery = body.gallery.filter((x) => typeof x === 'string');
   if (Array.isArray(body.musicTags)) patch.musicTags = body.musicTags.filter((x) => typeof x === 'string');
   if (Array.isArray(body.vibeTags)) patch.vibeTags = body.vibeTags.filter((x) => typeof x === 'string');
   if (body.bio && body.bio.length > 120) patch.bio = body.bio.slice(0, 120);
   return patch;
+}
+
+// Free-text profile fields a user can type themselves (as opposed to
+// avatarUrl/voiceNoteUrl, which are just links to files already screened by
+// Vision/Whisper at upload time - see ../moderation.js and routes/uploads.js
+// - and musicTags/vibeTags, which the app only ever sets from a fixed preset
+// list, never free typing). Checked with the same word-list filter used on
+// chat text, at zero extra cost (no external API).
+const MODERATED_TEXT_FIELDS = ['name', 'bio', 'city', 'neighbourhood', 'favoriteTrack'];
+
+// Returns a Turkish error message naming the first offending field, or null
+// if the patch is clean. Called before ANY of buildPatch's fields are saved,
+// so a rejected update leaves the profile completely unchanged rather than
+// partially applied.
+function findBlockedProfileText(patch) {
+  for (const field of MODERATED_TEXT_FIELDS) {
+    if (typeof patch[field] === 'string' && containsBlockedText(patch[field])) {
+      return `Profilinde küfür veya cinsel içerik barındıran bir alan var, kaydedilemedi.`;
+    }
+  }
+  return null;
 }
 
 const routes = [];
@@ -43,10 +85,33 @@ routes.push({
     const userId = requireAuth(req, res);
     if (userId === null) return;
     const patch = buildPatch(body);
+    const blockedReason = findBlockedProfileText(patch);
+    if (blockedReason) return res.status(422).json({ error: blockedReason });
     if (typeof body.onboardingComplete === 'boolean') patch.onboardingComplete = body.onboardingComplete;
     const row = db.update('users', userId, patch);
     if (!row) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     res.json({ user: toPublicUser(row) });
+  },
+});
+
+// Registers (or clears) this device's Expo push token against the caller's
+// own account - see ../push.js for what actually sends notifications, and
+// routes/discovery.js / routes/messages.js for where those get triggered.
+// An empty token clears it (called on logout, so a device that switches to
+// a different account stops pushing to the previous one).
+routes.push({
+  method: 'POST',
+  path: '/api/users/push-token',
+  handler: async (req, res, params, body) => {
+    const userId = requireAuth(req, res);
+    if (userId === null) return;
+    const token = typeof body.token === 'string' ? body.token.trim() : '';
+    if (token && !isExpoPushToken(token)) {
+      return res.status(400).json({ error: 'Geçersiz push token' });
+    }
+    const row = db.update('users', userId, { pushToken: token || null });
+    if (!row) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    res.json({ ok: true });
   },
 });
 
@@ -58,8 +123,34 @@ routes.push({
     const userId = requireAuth(req, res);
     if (userId === null) return;
     const patch = buildPatch(body);
+    const blockedReason = findBlockedProfileText(patch);
+    if (blockedReason) return res.status(422).json({ error: blockedReason });
     patch.onboardingComplete = true;
     const row = db.update('users', userId, patch);
+    if (!row) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    res.json({ user: toPublicUser(row) });
+  },
+});
+
+// Flips on the "verified" badge after the user submits a live selfie (see
+// SelfieDogrulama.tsx - it forces the front camera rather than the photo
+// library, so at least a real photo was taken just now).
+//
+// HONEST LIMITATION: this demo has no human moderation queue and no real
+// face-match/liveness model behind it, so submitting ANY selfie photo
+// approves instantly - it can't actually confirm the selfie matches the
+// person in the profile photos. A real product would hold this as
+// "pending" until a moderator or a dedicated face-match/liveness API
+// approves it, rather than trusting the client like this.
+routes.push({
+  method: 'POST',
+  path: '/api/users/me/verify-selfie',
+  handler: async (req, res, params, body) => {
+    const userId = requireAuth(req, res);
+    if (userId === null) return;
+    const selfieUrl = typeof body.selfieUrl === 'string' ? body.selfieUrl.trim() : '';
+    if (!selfieUrl) return res.status(400).json({ error: 'Bir selfie fotoğrafı gerekli.' });
+    const row = db.update('users', userId, { verified: true, verifiedAt: new Date().toISOString() });
     if (!row) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     res.json({ user: toPublicUser(row) });
   },
@@ -81,6 +172,29 @@ routes.push({
     db.removeWhere('reports', (r) => r.reporterId === userId || r.reportedUserId === userId);
     db.remove('users', userId);
     res.json({ ok: true });
+  },
+});
+
+// Backs every "view this person's profile" tap in the app (discovery deck's
+// "Profili aç", a match's "Profili Gör", radar's nearby avatars). Deliberately
+// placed AFTER /api/users/me above in this array - route matching in
+// server.js tries routes in order and stops at the first match, so the
+// literal "me" path has to win before this ":id" pattern gets a chance to
+// (wrongly) treat "me" as a numeric id.
+routes.push({
+  method: 'GET',
+  path: '/api/users/:id',
+  handler: async (req, res, params) => {
+    const userId = requireAuth(req, res);
+    if (userId === null) return;
+    const targetId = Number(params.id);
+    if (!Number.isFinite(targetId)) return res.status(400).json({ error: 'Geçersiz kullanıcı' });
+    if (isBlockedEitherWay(userId, targetId)) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    }
+    const row = db.findById('users', targetId);
+    if (!row) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    res.json({ user: toPublicProfile(row) });
   },
 });
 

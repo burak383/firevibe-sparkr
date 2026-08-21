@@ -17,11 +17,45 @@ export async function pickAndUploadImage(options?: { aspect?: [number, number] }
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    // `MediaTypeOptions.Images` still works but is deprecated in favor of
+    // this array form as of recent expo-image-picker versions.
+    mediaTypes: ['images'],
     quality: 0.7,
     base64: true,
     allowsEditing: !!options?.aspect,
     aspect: options?.aspect,
+  });
+
+  if (result.canceled || !result.assets?.[0]?.base64) return null;
+
+  const asset = result.assets[0];
+  const mimeType = asset.mimeType && asset.mimeType.startsWith('image/') ? asset.mimeType : 'image/jpeg';
+  const dataUrl = `data:${mimeType};base64,${asset.base64}`;
+
+  const { url } = await api.uploadImage(dataUrl);
+  return url;
+}
+
+/**
+ * Opens the device's FRONT camera (not the photo library - see
+ * SelfieDogrulama.tsx) so a verification selfie has to be taken live right
+ * now, rather than picking an old photo. Uploads it the same way
+ * `pickAndUploadImage` does. Returns the hosted URL, or `null` if cancelled.
+ *
+ * Throws ApiError on permission denial or upload failure.
+ */
+export async function takeAndUploadSelfie(): Promise<string | null> {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) {
+    throw new ApiError('Selfie çekebilmemiz için kamera iznine ihtiyacımız var.', 0);
+  }
+
+  const result = await ImagePicker.launchCameraAsync({
+    cameraType: ImagePicker.CameraType.front,
+    quality: 0.7,
+    base64: true,
+    allowsEditing: true,
+    aspect: [1, 1],
   });
 
   if (result.canceled || !result.assets?.[0]?.base64) return null;

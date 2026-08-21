@@ -3,6 +3,7 @@ const db = require('../db');
 const { signToken, hashPassword, verifyPassword, requireAuth } = require('../auth');
 const { toPublicUser } = require('../serialize');
 const { verifyGoogleIdToken } = require('../google-verify');
+const { containsBlockedText } = require('../moderation');
 
 function computeAge(birthDate) {
   if (!birthDate) return null;
@@ -32,6 +33,28 @@ function validatePassword(password) {
   return null;
 }
 
+// Register/login/SMS all match on an exact string, but a phone number can be
+// typed a dozen equivalent ways (spaces, dashes, leading 0 vs +90 country
+// code) - without normalizing, "0532 123 45 67" at signup and "05321234567"
+// at login silently fail to match. E-mails are left untouched beyond
+// trim+lowercase (already applied by callers); only digit-looking contacts
+// get reshaped into a canonical +90XXXXXXXXXX form.
+function normalizeContact(raw) {
+  const value = String(raw || '').trim().toLowerCase();
+  if (!value || value.includes('@')) return value;
+
+  const digits = value.replace(/[^0-9]/g, '');
+  if (!digits) return value;
+
+  let national = digits;
+  if (digits.startsWith('90') && digits.length === 12) {
+    national = digits.slice(2);
+  } else if (digits.startsWith('0') && digits.length === 11) {
+    national = digits.slice(1);
+  }
+  return `+90${national}`;
+}
+
 const routes = [];
 
 routes.push({
@@ -40,17 +63,32 @@ routes.push({
   handler: async (req, res, params, body) => {
     const name = (body.name || '').trim();
     const birthDate = (body.birthDate || '').trim();
-    const contact = (body.contact || '').trim().toLowerCase();
+    const contact = normalizeContact(body.contact);
     const password = body.password || '';
 
     if (!name) return res.status(400).json({ error: 'Adını yazmalısın' });
+    // Profile fields are also moderated on edit (routes/users.js) - checked
+    // here too since a display name is set at signup, before that route is
+    // ever hit, and is shown on the profile just the same.
+    if (containsBlockedText(name)) {
+      return res.status(422).json({ error: 'Adında küfür veya cinsel içerikli bir ifade var, başka bir isim dene.' });
+    }
     if (!birthDate) return res.status(400).json({ error: 'Doğum tarihini gir' });
     if (!contact || contact.length < 3) return res.status(400).json({ error: 'Telefon veya e-posta gerekli' });
     const pwError = validatePassword(password);
     if (pwError) return res.status(400).json({ error: pwError });
 
     const age = computeAge(birthDate);
-    if (age !== null && age < 18) {
+    // computeAge returns null for anything it can't parse as a real date -
+    // that USED to be treated as "can't check, let it through", which meant
+    // sending any unparseable birthDate (garbage text, wrong format) skipped
+    // the 18+ gate entirely and stored age: null. Reject it outright instead
+    // - the mobile app's own register screen already only ever sends a
+    // GG/AA/YYYY string, so this can't affect a real signup through the app.
+    if (age === null) {
+      return res.status(400).json({ error: 'Doğum tarihini GG/AA/YYYY formatında gir.' });
+    }
+    if (age < 18) {
       return res.status(400).json({ error: 'FireVibe’a katılmak için 18 yaşından büyük olmalısın.' });
     }
 
@@ -94,7 +132,7 @@ routes.push({
   method: 'POST',
   path: '/api/auth/login',
   handler: async (req, res, params, body) => {
-    const identifier = (body.identifier || '').trim().toLowerCase();
+    const identifier = normalizeContact(body.identifier);
     const password = body.password || '';
     if (!identifier) return res.status(400).json({ error: 'Telefon veya e-posta gerekli' });
     if (!password) return res.status(400).json({ error: 'Şifre gerekli' });
@@ -112,7 +150,7 @@ routes.push({
   method: 'POST',
   path: '/api/auth/forgot-password',
   handler: async (req, res, params, body) => {
-    const contact = (body.contact || '').trim().toLowerCase();
+    const contact = normalizeContact(body.contact);
     if (!contact || contact.length < 3) return res.status(400).json({ error: 'Telefon veya e-posta gerekli' });
 
     const row = db.find('users', (u) => u.contact === contact);
@@ -223,7 +261,7 @@ routes.push({
   method: 'POST',
   path: '/api/auth/sms/request',
   handler: async (req, res, params, body) => {
-    const phone = (body.phone || '').trim().toLowerCase();
+    const phone = normalizeContact(body.phone);
     if (!phone || phone.length < 5) return res.status(400).json({ error: 'Geçerli bir telefon numarası gir.' });
 
     // Don't leak which numbers have accounts - always respond ok, but only
@@ -252,7 +290,7 @@ routes.push({
   method: 'POST',
   path: '/api/auth/sms/verify',
   handler: async (req, res, params, body) => {
-    const phone = (body.phone || '').trim().toLowerCase();
+    const phone = normalizeContact(body.phone);
     const code = (body.code || '').trim();
     if (!phone || !code) return res.status(400).json({ error: 'Telefon numarası ve kod gerekli.' });
 

@@ -1,8 +1,10 @@
 const db = require('../db');
 const { requireAuth } = require('../auth');
-const { toPublicUser } = require('../serialize');
+const { toPublicProfile } = require('../serialize');
 const { compatibility, findOrCreateMatch, serializeMatch } = require('../matching');
 const { isBlockedEitherWay } = require('./safety');
+const { notifyUser } = require('../push');
+const { consumeFreeSwipe } = require('../subscription');
 
 const routes = [];
 
@@ -25,7 +27,7 @@ routes.push({
       )
       .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
       .slice(0, 20)
-      .map((row) => ({ ...toPublicUser(row), compatibility: compatibility(me, row) }));
+      .map((row) => ({ ...toPublicProfile(row), compatibility: compatibility(me, row) }));
 
     res.json({ deck });
   },
@@ -49,6 +51,27 @@ routes.push({
     if (!target) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     if (isBlockedEitherWay(userId, targetUserId)) {
       return res.status(403).json({ error: 'Bu kullanıcıyla etkileşim kuramazsın.' });
+    }
+
+    let me = db.findById('users', userId);
+    if (!me) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+
+    // Passing is unlimited by design - only a right-swipe (like/superlike)
+    // draws down the free daily allowance, and premium accounts skip this
+    // check entirely (see ../subscription.js). Checked BEFORE the swipe is
+    // recorded, so a blocked attempt doesn't get persisted as a used swipe -
+    // it stays retryable once the limit resets or premium is bought.
+    let swipeStatus = null;
+    if (action === 'like' || action === 'superlike') {
+      const gate = consumeFreeSwipe(me);
+      swipeStatus = { premium: gate.premium, remaining: gate.remaining, resetAt: gate.resetAt };
+      if (!gate.allowed) {
+        return res.status(402).json({
+          error: 'Günlük ücretsiz beğeni hakkını kullandın. Premium ile sınırsız beğen.',
+          swipeStatus,
+        });
+      }
+      me = db.findById('users', userId); // re-read: consumeFreeSwipe just persisted the new count
     }
 
     const existingSwipe = db.find('swipes', (s) => s.userId === userId && s.targetUserId === targetUserId);
@@ -78,13 +101,24 @@ routes.push({
       );
 
       if (theyLikedMe) {
-        const me = db.findById('users', userId);
-        const createdMatch = findOrCreateMatch(me, target, compatibility(me, target));
+        const { match: createdMatch, isNew } = findOrCreateMatch(me, target, compatibility(me, target));
         match = serializeMatch(createdMatch, userId);
+
+        // Only the OTHER person needs a push - the caller already sees the
+        // match right here in this response. Only for a genuinely new match
+        // (not two people re-swiping each other after an unmatch), and
+        // never for a bot (it has no device/pushToken to register).
+        if (isNew && !target.isBot) {
+          notifyUser(target.id, {
+            title: 'Yeni bir Vibe Match! 🔥',
+            body: `${me.name} ile eşleştin.`,
+            data: { type: 'match', matchId: createdMatch.id },
+          }).catch(() => {});
+        }
       }
     }
 
-    res.json({ match });
+    res.json({ match, swipeStatus });
   },
 });
 

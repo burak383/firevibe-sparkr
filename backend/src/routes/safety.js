@@ -1,6 +1,6 @@
 const db = require('../db');
 const { requireAuth } = require('../auth');
-const { toPublicUser } = require('../serialize');
+const { toPublicProfile } = require('../serialize');
 
 // True if `userId` has blocked `otherId`, in either direction - used
 // everywhere two users' visibility to each other matters (deck, radar,
@@ -25,7 +25,7 @@ routes.push({
     const blockedUsers = blocks
       .map((b) => {
         const user = db.findById('users', b.blockedId);
-        return user ? { blockId: b.id, user: toPublicUser(user) } : null;
+        return user ? { blockId: b.id, user: toPublicProfile(user) } : null;
       })
       .filter(Boolean);
     res.json({ blocked: blockedUsers });

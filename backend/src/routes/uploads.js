@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { requireAuth } = require('../auth');
 const { UPLOAD_DIR } = require('../uploads-dir');
+const { checkImageSafety, checkAudioSafety } = require('../moderation');
 
 // Zero-dependency "object storage": accepts a base64 data URL and writes it
 // to disk under backend/data/uploads/, then hands back a URL the server
@@ -68,6 +69,25 @@ routes.push({
     }
     if (!buffer.length) {
       return res.status(400).json({ error: 'Boş dosya gönderildi.' });
+    }
+
+    // Content moderation (see ../moderation.js) - runs on EVERY upload through
+    // this one endpoint, so it covers chat photos, profile photos, selfie
+    // verification, and voice notes alike. Fails open if the underlying
+    // service isn't configured or errors out (see that file's header comment)
+    // - only an actual LIKELY/VERY_LIKELY detection blocks the upload.
+    const isImage = mimeType.toLowerCase().startsWith('image/');
+    const isAudio = mimeType.toLowerCase().startsWith('audio/');
+    if (isImage) {
+      const { flagged, reason } = await checkImageSafety(buffer);
+      if (flagged) {
+        return res.status(422).json({ error: reason || 'Bu görsel paylaşım kurallarımıza aykırı görünüyor.' });
+      }
+    } else if (isAudio) {
+      const { flagged, reason } = await checkAudioSafety(buffer, ext);
+      if (flagged) {
+        return res.status(422).json({ error: reason || 'Bu ses kaydı paylaşım kurallarımıza aykırı görünüyor.' });
+      }
     }
 
     const filename = `${userId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`;

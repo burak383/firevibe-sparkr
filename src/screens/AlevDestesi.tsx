@@ -4,12 +4,16 @@ import {
   Alert,
   Image,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+// The community SafeAreaView (not react-native's own) is required here - it
+// reads real inset values from the SafeAreaProvider in App.tsx and supports
+// the `edges` prop; react-native's built-in SafeAreaView is iOS-only and is
+// a no-op on Android, which would leave content under the status bar.
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 // expo-av is deprecated (since SDK 53) and will be fully removed in SDK 55 -
 // this project is on SDK 54, its last supported release. Before upgrading
@@ -21,9 +25,10 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, withAlpha } from '../theme';
 import { api, ApiError } from '../api/client';
-import type { DeckUser, FireHour } from '../api/types';
+import type { DeckUser, FireHour, SwipeStatus } from '../api/types';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import MainTabBar from '../components/MainTabBar';
+import { useAuth } from '../context/AuthContext';
 
 const fallbackHeroImage =
   'https://fwtngjyirchhhysukjxi.supabase.co/storage/v1/object/public/project-images/ed3e8af0-715b-43d1-9198-05dbe4ffa7eb/b53d5af3-c38e-4374-a09b-ec26dabcf986.png';
@@ -149,6 +154,7 @@ function VoiceVibe({ name, voiceNoteUrl }: { name: string; voiceNoteUrl: string 
 
 export default function SparkRScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { user, refreshUser } = useAuth();
   const [deck, setDeck] = useState<DeckUser[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -156,6 +162,14 @@ export default function SparkRScreen() {
   const [error, setError] = useState<string | null>(null);
   const [fireHour, setFireHour] = useState<FireHour | null>(null);
   const [activeCount, setActiveCount] = useState(0);
+  // Seeded from the AuthContext user (kept fresh across app restarts /
+  // other screens) and then updated directly from each swipe response, so
+  // the badge below doesn't need an extra round trip after every like.
+  const [swipeStatus, setSwipeStatus] = useState<SwipeStatus | null>(user?.swipeStatus ?? null);
+
+  useEffect(() => {
+    if (user?.swipeStatus) setSwipeStatus(user.swipeStatus);
+  }, [user?.swipeStatus]);
 
   const loadDeck = useCallback(async () => {
     setLoading(true);
@@ -197,12 +211,21 @@ export default function SparkRScreen() {
     if (!current || acting) return;
     setActing(true);
     try {
-      const { match } = await api.swipe(current.id, action);
+      const { match, swipeStatus: freshStatus } = await api.swipe(current.id, action);
+      setError(null); // clear any earlier failed-swipe banner now that one worked
+      if (freshStatus) setSwipeStatus(freshStatus); // like/superlike - keeps the "X/10 kaldı" badge accurate without a refetch
       setIndex((prev) => prev + 1);
       if (match) {
         navigation.navigate('Match', { matchId: match.id });
       }
     } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        // Daily free-like limit reached - straight to the paywall instead
+        // of showing this as a generic error banner.
+        refreshUser().catch(() => {}); // picks up the just-hit remaining:0 status for when they come back
+        navigation.navigate('Premium');
+        return;
+      }
       setError(err instanceof ApiError ? err.message : 'Bir şeyler ters gitti, tekrar dene.');
     } finally {
       setActing(false);
@@ -280,6 +303,15 @@ export default function SparkRScreen() {
               </Pressable>
             </View>
 
+            {swipeStatus && !swipeStatus.premium && (
+              <View style={styles.limitRow}>
+                <Pressable style={styles.limitPill} onPress={() => navigation.navigate('Premium')}>
+                  <Feather name="zap" size={13} color={colors.primary} />
+                  <Text style={styles.limitText}>{swipeStatus.remaining ?? 0}/10 beğeni kaldı · Premium'a geç</Text>
+                </Pressable>
+              </View>
+            )}
+
             <View style={styles.profileMeta}>
               <View style={styles.distancePill}>
                 <Text style={styles.distanceText}>{current.distanceKm.toFixed(1)} km uzakta</Text>
@@ -325,20 +357,7 @@ export default function SparkRScreen() {
 
             <Pressable
               style={styles.openProfileButton}
-              onPress={() =>
-                Alert.alert(
-                  `${current.name}, ${current.age ?? '—'}`,
-                  [
-                    current.bio,
-                    current.favoriteTrack ? `Favori parça: ${current.favoriteTrack}` : null,
-                    [...current.musicTags, ...current.vibeTags].length
-                      ? `Etiketler: ${[...current.musicTags, ...current.vibeTags].join(', ')}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join('\n\n')
-                )
-              }
+              onPress={() => navigation.navigate('ViewProfile', { userId: current.id })}
             >
               <Ionicons name="chevron-up" size={17} color={colors.secondary} />
               <Text style={styles.openProfileText}>Profili aç · ortak sinyalleri gör</Text>
@@ -560,6 +579,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: withAlpha(colors.card, 0.85),
+  },
+  limitRow: {
+    position: 'relative',
+    zIndex: 2,
+    marginTop: 8,
+    paddingHorizontal: 20,
+  },
+  limitPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.primary, 0.3),
+    backgroundColor: withAlpha(colors.card, 0.85),
+  },
+  limitText: {
+    color: colors.primary,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: '700',
   },
   profileMeta: {
     position: 'absolute',
