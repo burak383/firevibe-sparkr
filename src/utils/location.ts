@@ -17,7 +17,7 @@ export async function detectCityFromLocation(): Promise<DetectedLocation> {
   const { status } = await Location.requestForegroundPermissionsAsync();
   if (status !== 'granted') {
     throw new LocationError(
-      'Konum izni verilmedi. Ayarlar’dan FireVibe için konum iznini açıp tekrar dene.'
+      'Konum izni verilmedi. Ayarlar’dan SparkR için konum iznini açıp tekrar dene.'
     );
   }
 

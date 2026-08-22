@@ -31,7 +31,7 @@ const KVKK_SECTIONS: { title: string; body: string }[] = [
   {
     title: '1. Veri Sorumlusu',
     body:
-      '6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca, FireVibe uygulaması kapsamında işlenen kişisel verileriniz bakımından veri sorumlusu Burak Tüfekçi (şahıs işletmesi)\'dır. Sorularınız için seolen8@gmail.com adresinden bize ulaşabilirsiniz.',
+      '6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca, SparkR uygulaması kapsamında işlenen kişisel verileriniz bakımından veri sorumlusu Burak Tüfekçi (şahıs işletmesi)\'dır. Sorularınız için seolen8@gmail.com adresinden bize ulaşabilirsiniz.',
   },
   {
     title: '2. İşlenen Kişisel Veriler',
@@ -80,7 +80,7 @@ const COMMUNITY_RULES: { title: string; body: string }[] = [
   },
   {
     title: '18 yaş altı yasak',
-    body: 'FireVibe yalnızca 18 yaş ve üzeri kullanıcılar içindir. 18 yaşından küçük olduğunu öğrendiğimiz hesaplar kaldırılır.',
+    body: 'SparkR yalnızca 18 yaş ve üzeri kullanıcılar içindir. 18 yaşından küçük olduğunu öğrendiğimiz hesaplar kaldırılır.',
   },
   {
     title: 'Şikayet ve engelleme her zaman elinde',

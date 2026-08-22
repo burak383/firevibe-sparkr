@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "FireVibe",
+    "name": "SparkR",
     "slug": "firevibe-sparkr",
     "scheme": "firevibe",
     "version": "1.0.0",
@@ -22,7 +22,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#0B0B10"
       },
-      "permissions": ["READ_MEDIA_IMAGES", "RECORD_AUDIO", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+      "permissions": ["RECORD_AUDIO", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "web": {
       "bundler": "metro"
@@ -47,8 +47,7 @@
           "locationWhenInUsePermission": "Profilindeki şehir/semt bilgisini otomatik doldurabilmemiz için konumuna erişmemiz gerekiyor."
         }
       ],
-      "expo-notifications",
-      "expo-asset"
+      "expo-notifications"
     ],
     "extra": {}
   }

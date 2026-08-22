@@ -8,6 +8,7 @@ interface AuthContextValue {
   login: (identifier: string, password: string) => Promise<User>;
   loginWithSms: (phone: string, code: string) => Promise<User>;
   loginWithGoogle: (idToken: string) => Promise<User>;
+  loginWithFacebook: (code: string, redirectUri: string) => Promise<User>;
   register: (payload: { name: string; birthDate: string; contact: string; password: string }) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<User | null>;
@@ -60,6 +61,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithGoogle = useCallback(async (idToken: string) => {
     const { token, user: loggedInUser } = await api.googleLogin(idToken);
+    await setToken(token);
+    setUser(loggedInUser);
+    return loggedInUser;
+  }, []);
+
+  const loginWithFacebook = useCallback(async (code: string, redirectUri: string) => {
+    const { token, user: loggedInUser } = await api.facebookLogin(code, redirectUri);
     await setToken(token);
     setUser(loggedInUser);
     return loggedInUser;
@@ -124,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       loginWithSms,
       loginWithGoogle,
+      loginWithFacebook,
       register,
       logout,
       refreshUser,
@@ -137,6 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       loginWithSms,
       loginWithGoogle,
+      loginWithFacebook,
       register,
       logout,
       refreshUser,

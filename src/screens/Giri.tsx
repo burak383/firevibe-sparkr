@@ -26,11 +26,12 @@ import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { api, ApiError } from '../api/client';
 import { extractGoogleIdToken, isGoogleSignInConfigured, useGoogleAuthRequest } from '../utils/googleAuth';
+import { isFacebookSignInConfigured, promptFacebookLogin } from '../utils/facebookAuth';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 export default function LoginScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { login, loginWithSms, loginWithGoogle } = useAuth();
+  const { login, loginWithSms, loginWithGoogle, loginWithFacebook } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -39,6 +40,7 @@ export default function LoginScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [facebookSubmitting, setFacebookSubmitting] = useState(false);
 
   const [googleRequest, googleResponse, promptGoogleAsync] = useGoogleAuthRequest();
 
@@ -67,6 +69,27 @@ export default function LoginScreen() {
       return;
     }
     promptGoogleAsync();
+  };
+
+  const handleFacebookPress = async () => {
+    if (!isFacebookSignInConfigured) {
+      Alert.alert(
+        'Facebook ile giriş yapılandırılmamış',
+        'Bunu etkinleştirmek için mobile/.env dosyasına EXPO_PUBLIC_FACEBOOK_APP_ID değerini, backend/.env dosyasına da FACEBOOK_APP_ID ve FACEBOOK_APP_SECRET değerlerini eklemen gerekiyor. developers.facebook.com/apps üzerinde bir uygulama oluşturman yeterli - adımlar için .env.example dosyalarındaki notlara bak.'
+      );
+      return;
+    }
+    setFacebookSubmitting(true);
+    try {
+      const result = await promptFacebookLogin();
+      if (!result) return; // cancelled, denied, or something went wrong
+      await loginWithFacebook(result.code, result.redirectUri);
+      // RootNavigator swaps the stack automatically once `user` is set.
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Facebook ile giriş yapılamadı.');
+    } finally {
+      setFacebookSubmitting(false);
+    }
   };
 
   const [smsModalOpen, setSmsModalOpen] = useState(false);
@@ -272,7 +295,7 @@ export default function LoginScreen() {
               <View style={styles.securityNotice}>
                 <Ionicons name="shield-checkmark" size={19} color={colors.success} />
                 <Text style={styles.securityText}>
-                  Giriş bilgilerin şifrelenir ve güvenle saklanır. FireVibe’da kontrol her zaman sende.
+                  Giriş bilgilerin şifrelenir ve güvenle saklanır. SparkR’da kontrol her zaman sende.
                 </Text>
               </View>
 
@@ -323,6 +346,19 @@ export default function LoginScreen() {
                   <MaterialCommunityIcons name="google" size={19} color={colors.cardForeground} />
                 )}
                 <Text style={styles.socialText}>Google ile devam et</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.facebookButton}
+                onPress={handleFacebookPress}
+                disabled={facebookSubmitting}
+              >
+                {facebookSubmitting ? (
+                  <ActivityIndicator size="small" color={colors.cardForeground} />
+                ) : (
+                  <MaterialCommunityIcons name="facebook" size={19} color={colors.cardForeground} />
+                )}
+                <Text style={styles.socialText}>Facebook ile devam et</Text>
               </Pressable>
 
               <Pressable style={styles.smsButton} onPress={openSmsLogin}>
@@ -713,6 +749,17 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   googleButton: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 20,
+    backgroundColor: colors.background,
+  },
+  facebookButton: {
     height: 52,
     flexDirection: 'row',
     alignItems: 'center',

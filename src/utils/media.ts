@@ -11,11 +11,14 @@ import { api, ApiError } from '../api/client';
  * show it the same way they already handle other ApiErrors.
  */
 export async function pickAndUploadImage(options?: { aspect?: [number, number] }): Promise<string | null> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    throw new ApiError('Fotoğraflarına erişebilmemiz için galeri iznine ihtiyacımız var.', 0);
-  }
-
+  // Deliberately NOT calling requestMediaLibraryPermissionsAsync() here: on
+  // Android 13+ that forces the broad READ_MEDIA_IMAGES runtime permission,
+  // which then has to be justified in Play Console's permissions
+  // declaration. launchImageLibraryAsync() on its own opens the system photo
+  // picker instead (Android's ACTION_PICK_IMAGES / iOS's native picker),
+  // which needs no gallery-wide permission at all - the OS hands back only
+  // the specific photo the user taps, so the app never needs (and never
+  // requests) broad read access to the library.
   const result = await ImagePicker.launchImageLibraryAsync({
     // `MediaTypeOptions.Images` still works but is deprecated in favor of
     // this array form as of recent expo-image-picker versions.

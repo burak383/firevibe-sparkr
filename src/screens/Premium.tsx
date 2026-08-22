@@ -110,7 +110,7 @@ export default function PremiumScreen() {
         <View style={styles.badge}>
           <Icon name="fire" size={40} color={colors.primary} />
         </View>
-        <Text style={styles.title}>FireVibe Premium</Text>
+        <Text style={styles.title}>SparkR Premium</Text>
         <Text style={styles.subtitle}>Günlük beğeni limitini kaldır, geceyi sınırsız yaşa.</Text>
 
         <View style={styles.perksCard}>

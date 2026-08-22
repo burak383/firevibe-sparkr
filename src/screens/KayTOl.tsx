@@ -21,6 +21,7 @@ import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 import { extractGoogleIdToken, isGoogleSignInConfigured, useGoogleAuthRequest } from '../utils/googleAuth';
+import { isFacebookSignInConfigured, promptFacebookLogin } from '../utils/facebookAuth';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 const HERO_IMAGE =
@@ -54,7 +55,7 @@ function formatBirthDateInput(value: string): string {
 
 export default function CreateAccountScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { register, loginWithGoogle } = useAuth();
+  const { register, loginWithGoogle, loginWithFacebook } = useAuth();
 
   const [name, setName] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -64,6 +65,7 @@ export default function CreateAccountScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [facebookSubmitting, setFacebookSubmitting] = useState(false);
 
   const [googleRequest, googleResponse, promptGoogleAsync] = useGoogleAuthRequest();
 
@@ -92,6 +94,27 @@ export default function CreateAccountScreen() {
       return;
     }
     promptGoogleAsync();
+  };
+
+  const handleFacebookPress = async () => {
+    if (!isFacebookSignInConfigured) {
+      Alert.alert(
+        'Facebook ile kayıt yapılandırılmamış',
+        'Bunu etkinleştirmek için mobile/.env dosyasına EXPO_PUBLIC_FACEBOOK_APP_ID değerini, backend/.env dosyasına da FACEBOOK_APP_ID ve FACEBOOK_APP_SECRET değerlerini eklemen gerekiyor. Adımlar için .env.example dosyalarındaki notlara bak.'
+      );
+      return;
+    }
+    setFacebookSubmitting(true);
+    try {
+      const result = await promptFacebookLogin();
+      if (!result) return; // cancelled, denied, or something went wrong
+      await loginWithFacebook(result.code, result.redirectUri);
+      // RootNavigator moves to onboarding/main app automatically once `user` is set.
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Facebook ile kayıt olunamadı.');
+    } finally {
+      setFacebookSubmitting(false);
+    }
   };
 
   const strength = passwordStrength(password);
@@ -294,6 +317,19 @@ export default function CreateAccountScreen() {
                   <FontAwesome5 name="google" size={17} color={colors.cardForeground} />
                 )}
                 <Text style={styles.googleText}>Google ile devam et</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.facebookButton}
+                onPress={handleFacebookPress}
+                disabled={facebookSubmitting}
+              >
+                {facebookSubmitting ? (
+                  <ActivityIndicator size="small" color={colors.cardForeground} />
+                ) : (
+                  <FontAwesome5 name="facebook" size={17} color={colors.cardForeground} />
+                )}
+                <Text style={styles.googleText}>Facebook ile devam et</Text>
               </Pressable>
             </View>
 
@@ -585,6 +621,18 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   googleButton: {
+    minHeight: 55,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 9,
+  },
+  facebookButton: {
+    marginTop: 12,
     minHeight: 55,
     borderRadius: 20,
     borderWidth: 1,

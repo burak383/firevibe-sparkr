@@ -182,6 +182,13 @@ export const api = {
       auth: false,
     }),
 
+  facebookLogin: (code: string, redirectUri: string) =>
+    request<{ token: string; user: User }>('/api/auth/facebook', {
+      method: 'POST',
+      body: { code, redirectUri },
+      auth: false,
+    }),
+
   // An empty string clears the registration (called on logout - see
   // AuthContext.logout - so a device that switches accounts stops pushing
   // notifications meant for the previous one).

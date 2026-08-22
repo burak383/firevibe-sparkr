@@ -1,4 +1,4 @@
-// Design tokens for FireVibe / SparkR.
+// Design tokens for SparkR.
 // Exported in a few different shapes on purpose: the screens in this project
 // (originally generated separately) import this module in several different
 // styles (`import theme from './theme'`, `import { theme } from './theme'`,
