@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import {
   NavigationContainer,
@@ -12,13 +12,13 @@ import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme';
 import { registerForPushNotifications, addNotificationResponseListener } from '../utils/push';
 import { configurePurchases } from '../utils/subscription';
+import { detectCityFromLocation } from '../utils/location';
 
 import LoginScreen from '../screens/Giri';
-import RegisterScreen from '../screens/KayTOl';
-import ForgotPasswordScreen from '../screens/IfremiUnuttum';
 import VibeSetupScreen from '../screens/VibeKurulumu';
 import DeckScreen from '../screens/AlevDestesi';
 import RadarScreen from '../screens/VibeRadar';
+import LikesScreen from '../screens/Begeniler';
 import MyVibeScreen from '../screens/BenimVibeM';
 import MatchScreen from '../screens/BuBirVibe';
 import ChatScreen from '../screens/DenizIleSohbet';
@@ -30,11 +30,12 @@ import PremiumScreen from '../screens/Premium';
 
 export type RootStackParamList = {
   Login: undefined;
-  Register: undefined;
-  ForgotPassword: undefined;
   VibeSetup: undefined;
   Deck: undefined;
   Radar: undefined;
+  // "Beğenenler" / "Beğeniler" - who liked you (locked behind Premium until
+  // you subscribe) and who you've liked. See screens/Begeniler.tsx.
+  Likes: undefined;
   MyVibe: undefined;
   Match: { matchId: number };
   Chat: { matchId: number };
@@ -76,7 +77,31 @@ const navTheme: NavTheme = {
 };
 
 export default function RootNavigator() {
-  const { user, initializing } = useAuth();
+  const { user, initializing, updateUser } = useAuth();
+
+  // Requests the person's real GPS-detected city right after login and
+  // saves it - see backend/src/routes/users.js's applyLocationLock, which
+  // makes this first successful save permanent (the backend refuses to
+  // change city/neighbourhood again after that, and Profil.tsx switches
+  // those fields to read-only once `locationConfirmed` comes back true).
+  // `attemptedRef` makes sure this only fires once per app session even if
+  // it fails (permission denied, GPS off, etc.) - `locationConfirmed`
+  // simply stays false so it's tried again next time the app is opened, and
+  // the "Konumu bul" button in Profil.tsx still works as a manual fallback
+  // in the meantime.
+  const locationAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (!user || user.locationConfirmed || locationAttemptedRef.current) return;
+    locationAttemptedRef.current = true;
+    (async () => {
+      try {
+        const detected = await detectCityFromLocation();
+        await updateUser({ city: detected.city, neighbourhood: detected.neighbourhood });
+      } catch {
+        // Not fatal - see comment above.
+      }
+    })();
+  }, [user, updateUser]);
 
   // Only register once the full app stack is actually reachable (logged in
   // + onboarding done) - that's also exactly when "navigate to Match/Chat"
@@ -118,17 +143,14 @@ export default function RootNavigator() {
     <NavigationContainer ref={navigationRef} theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         {!user ? (
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-          </>
+          <Stack.Screen name="Login" component={LoginScreen} />
         ) : !user.onboardingComplete ? (
           <Stack.Screen name="VibeSetup" component={VibeSetupScreen} />
         ) : (
           <>
             <Stack.Screen name="Deck" component={DeckScreen} />
             <Stack.Screen name="Radar" component={RadarScreen} />
+            <Stack.Screen name="Likes" component={LikesScreen} />
             <Stack.Screen name="MyVibe" component={MyVibeScreen} />
             <Stack.Screen name="Match" component={MatchScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />

@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 import { extractGoogleIdToken, isGoogleSignInConfigured, useGoogleAuthRequest } from '../utils/googleAuth';
 import { isFacebookSignInConfigured, promptFacebookLogin } from '../utils/facebookAuth';
+import { isAppleSignInAvailablePlatform, isAppleSignInAvailable, promptAppleSignIn } from '../utils/appleAuth';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 const HERO_IMAGE =
@@ -55,7 +56,7 @@ function formatBirthDateInput(value: string): string {
 
 export default function CreateAccountScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { register, loginWithGoogle, loginWithFacebook } = useAuth();
+  const { register, loginWithGoogle, loginWithFacebook, loginWithApple } = useAuth();
 
   const [name, setName] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -66,6 +67,13 @@ export default function CreateAccountScreen() {
   const [error, setError] = useState<string | null>(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [facebookSubmitting, setFacebookSubmitting] = useState(false);
+  const [appleSubmitting, setAppleSubmitting] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    if (!isAppleSignInAvailablePlatform) return;
+    isAppleSignInAvailable().then(setAppleAvailable);
+  }, []);
 
   const [googleRequest, googleResponse, promptGoogleAsync] = useGoogleAuthRequest();
 
@@ -114,6 +122,20 @@ export default function CreateAccountScreen() {
       setError(err instanceof ApiError ? err.message : 'Facebook ile kayıt olunamadı.');
     } finally {
       setFacebookSubmitting(false);
+    }
+  };
+
+  const handleApplePress = async () => {
+    setAppleSubmitting(true);
+    try {
+      const result = await promptAppleSignIn();
+      if (!result) return; // cancelled
+      await loginWithApple(result.identityToken, result.fullName);
+      // RootNavigator moves to onboarding/main app automatically once `user` is set.
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Apple ile kayıt olunamadı.');
+    } finally {
+      setAppleSubmitting(false);
     }
   };
 
@@ -331,6 +353,17 @@ export default function CreateAccountScreen() {
                 )}
                 <Text style={styles.googleText}>Facebook ile devam et</Text>
               </Pressable>
+
+              {appleAvailable && (
+                <Pressable style={styles.appleButton} onPress={handleApplePress} disabled={appleSubmitting}>
+                  {appleSubmitting ? (
+                    <ActivityIndicator size="small" color={colors.primaryForeground} />
+                  ) : (
+                    <MaterialCommunityIcons name="apple" size={19} color={colors.primaryForeground} />
+                  )}
+                  <Text style={styles.appleText}>Apple ile devam et</Text>
+                </Pressable>
+              )}
             </View>
 
             <View style={styles.loginRow}>
@@ -645,6 +678,25 @@ const styles = StyleSheet.create({
   },
   googleText: {
     color: colors.cardForeground,
+    fontFamily: fonts.heading,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  // Apple's Human Interface Guidelines call for a solid black (or white, on
+  // a dark background) button rather than the outlined style used for
+  // Google/Facebook above.
+  appleButton: {
+    marginTop: 12,
+    minHeight: 55,
+    borderRadius: 20,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 9,
+  },
+  appleText: {
+    color: colors.primaryForeground,
     fontFamily: fonts.heading,
     fontSize: 14,
     fontWeight: '700',
