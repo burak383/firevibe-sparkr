@@ -7,6 +7,7 @@ const { verifyAppleIdToken } = require('../apple-verify');
 const { verifyFacebookAccessToken, exchangeFacebookCode } = require('../facebook-verify');
 const { containsBlockedText } = require('../moderation');
 const { computeAge } = require('../age');
+const { isSmsProviderConfigured, sendOtpSms } = require('../sms');
 
 function validatePassword(password) {
   if (typeof password !== 'string' || password.length < 8) return 'Şifre en az 8 karakter olmalı';
@@ -458,12 +459,24 @@ routes.push({
     db.insert('smsCodes', { phone, code, expiresAt, used: false });
     console.log(`[auth] SMS doğrulama kodu (${phone}): ${code}`);
 
+    if (isSmsProviderConfigured) {
+      try {
+        await sendOtpSms(phone, code);
+      } catch (err) {
+        // Don't fail the request over a delivery hiccup - the code is still
+        // valid in the DB above; log it so a real, persistent provider
+        // outage shows up somewhere instead of failing sign-in silently.
+        console.log('[auth] SMS gönderimi başarısız:', err instanceof Error ? err.message : err);
+      }
+    }
+
     res.json({
       ok: true,
-      message: 'Doğrulama kodu gönderildi.',
-      // Exposed only because this demo has no real SMS provider wired up -
-      // in production this would be delivered via SMS, never in the response.
-      devCode: code,
+      message: isSmsProviderConfigured ? 'Doğrulama kodu telefonuna gönderildi.' : 'Doğrulama kodu gönderildi.',
+      // Only ever included when there's no real SMS provider wired up (see
+      // src/sms.js / ILETIMERKEZI_* in .env.example) - never expose the actual
+      // code once real delivery is live.
+      ...(isSmsProviderConfigured ? {} : { devCode: code }),
     });
   },
 });
