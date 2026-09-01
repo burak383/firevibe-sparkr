@@ -10,7 +10,17 @@ const dir = path.dirname(DB_PATH);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
 const EMPTY_STATE = {
-  nextIds: { users: 1, passwordResets: 1, smsCodes: 1, swipes: 1, matches: 1, messages: 1, blocks: 1, reports: 1 },
+  nextIds: {
+    users: 1,
+    passwordResets: 1,
+    smsCodes: 1,
+    swipes: 1,
+    matches: 1,
+    messages: 1,
+    blocks: 1,
+    reports: 1,
+    profileViews: 1,
+  },
   users: [],
   passwordResets: [],
   smsCodes: [],
@@ -19,6 +29,11 @@ const EMPTY_STATE = {
   messages: [],
   blocks: [],
   reports: [],
+  // Who viewed whose profile - see routes/users.js's recordProfileView and
+  // routes/discovery.js's GET /profile-views (the "Görüntüleyenler" tab).
+  // One row per (viewerId, viewedUserId) pair, viewedAt bumped on repeat
+  // views rather than inserting duplicates.
+  profileViews: [],
 };
 
 function load() {

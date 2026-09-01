@@ -7,8 +7,12 @@ const { readBody, enhanceResponse, compilePattern } = require('./http-helpers');
 const { ensureSeeded } = require('./seed');
 const { UPLOAD_DIR } = require('./uploads-dir');
 const { createLimiter, clientIp } = require('./rate-limit');
+const { startReengagementJobs } = require('./reengagement');
 
 ensureSeeded();
+// Periodic "come back" push notifications (stale matches, Fire Hour
+// starting soon) - see reengagement.js for both jobs' logic.
+startReengagementJobs();
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');

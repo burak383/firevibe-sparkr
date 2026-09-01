@@ -36,6 +36,7 @@
 // real webhook hit it - RevenueCat's dashboard has a "send test webhook"
 // button for exactly that, and Render's logs will show what arrived.
 const db = require('../db');
+const { activateBoost, addBonusSuperlikes, SUPERLIKE_PACK_SIZE } = require('../subscription');
 
 const routes = [];
 
@@ -97,6 +98,30 @@ routes.push({
       // Some event shapes omit expiration_at_ms - but the event itself says
       // it's over, so clear it.
       db.update('users', userId, { premiumExpiresAt: null });
+    }
+
+    // "Boost" is a one-time consumable, not a subscription - it never
+    // carries expiration_at_ms, so it's handled as its own independent
+    // block (not an else-if off the premium logic above). RevenueCat sends
+    // either NON_RENEWING_PURCHASE or (on some store/SDK combos)
+    // INITIAL_PURCHASE for non-subscription products - accept both. See
+    // ../subscription.js's activateBoost (stacks back-to-back purchases
+    // instead of resetting the timer).
+    if (
+      event.product_id === 'sparkr_boost_30min' &&
+      (event.type === 'NON_RENEWING_PURCHASE' || event.type === 'INITIAL_PURCHASE')
+    ) {
+      activateBoost(row);
+    }
+
+    // Extra Super Vibe pack - another consumable, same event-type handling
+    // as Boost above, just crediting a plain counter instead of a timestamp.
+    // See ../subscription.js's addBonusSuperlikes.
+    if (
+      event.product_id === 'sparkr_superlike_pack_5' &&
+      (event.type === 'NON_RENEWING_PURCHASE' || event.type === 'INITIAL_PURCHASE')
+    ) {
+      addBonusSuperlikes(row, SUPERLIKE_PACK_SIZE);
     }
 
     console.log(`[subscription] RevenueCat event ${event.type} for user #${userId}`);

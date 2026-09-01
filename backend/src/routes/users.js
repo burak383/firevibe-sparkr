@@ -4,8 +4,23 @@ const { toPublicUser, toPublicProfile } = require('../serialize');
 const { isBlockedEitherWay } = require('./safety');
 const { isExpoPushToken } = require('../push');
 const { containsBlockedText } = require('../moderation');
+const { computeAge } = require('../age');
 
 const MOODS = ['Chill', 'Party', 'Deep Talk', 'Adrenaline'];
+
+// One row per (viewerId, viewedUserId) pair - repeat views bump viewedAt
+// rather than inserting duplicates, same dedup pattern as swipes. Feeds
+// routes/discovery.js's GET /profile-views (the "Görüntüleyenler" tab).
+function recordProfileView(viewerId, viewedUserId) {
+  if (viewerId === viewedUserId) return;
+  const existing = db.find('profileViews', (v) => v.viewerId === viewerId && v.viewedUserId === viewedUserId);
+  const viewedAt = new Date().toISOString();
+  if (existing) {
+    db.update('profileViews', existing.id, { viewedAt });
+  } else {
+    db.insert('profileViews', { viewerId, viewedUserId, viewedAt });
+  }
+}
 
 function buildPatch(body) {
   const patch = {};
@@ -15,6 +30,9 @@ function buildPatch(body) {
   }
   if (body.mood && MOODS.includes(body.mood)) patch.mood = body.mood;
   if (typeof body.visible === 'boolean') patch.visible = body.visible;
+  // "Okundu bilgisini kapat" toggle (default true/on) - see
+  // routes/messages.js's GET handler for where this is actually enforced.
+  if (typeof body.readReceiptsEnabled === 'boolean') patch.readReceiptsEnabled = body.readReceiptsEnabled;
   // Clamp to the same 18-50 bounds the mobile app's drag slider enforces -
   // defense in depth in case a request ever reaches this endpoint some
   // other way than that slider (an older client build, a direct API call).
@@ -41,6 +59,25 @@ function buildPatch(body) {
   if (Array.isArray(body.vibeTags)) patch.vibeTags = body.vibeTags.filter((x) => typeof x === 'string');
   if (body.bio && body.bio.length > 120) patch.bio = body.bio.slice(0, 120);
   return patch;
+}
+
+// The app asks for (and saves) the person's real GPS-detected city right
+// after login (see mobile/src/navigation/RootNavigator.tsx) and again from
+// the "Konumu bul" button in Profil.tsx if that first attempt failed. Either
+// way, the FIRST successful city save should stick permanently - otherwise
+// someone could fake a different city than where they actually are, which
+// matters for a dating app built around "who's nearby". Mutates `patch` in
+// place: drops city/neighbourhood entirely once already confirmed, or flips
+// on the confirmed flag the moment a city is saved for the first time.
+function applyLocationLock(row, patch) {
+  if (row.locationConfirmed) {
+    delete patch.city;
+    delete patch.neighbourhood;
+    return;
+  }
+  if (typeof patch.city === 'string' && patch.city.trim()) {
+    patch.locationConfirmed = true;
+  }
 }
 
 // Free-text profile fields a user can type themselves (as opposed to
@@ -84,7 +121,10 @@ routes.push({
   handler: async (req, res, params, body) => {
     const userId = requireAuth(req, res);
     if (userId === null) return;
+    const existing = db.findById('users', userId);
+    if (!existing) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     const patch = buildPatch(body);
+    applyLocationLock(existing, patch);
     const blockedReason = findBlockedProfileText(patch);
     if (blockedReason) return res.status(422).json({ error: blockedReason });
     if (typeof body.onboardingComplete === 'boolean') patch.onboardingComplete = body.onboardingComplete;
@@ -116,15 +156,50 @@ routes.push({
 });
 
 // Convenience endpoint for the "Vibe Kurulumu" onboarding screen.
+//
+// Also doubles as the one-and-only place a Google/Facebook/Apple-created
+// account ever gets to complete the 18+ age check that /api/auth/register
+// already enforces for direct email/password signups. Those three social
+// routes (see routes/auth.js) can't verify age themselves - none of Google,
+// Facebook, or Apple's basic sign-in scopes hand back a birth date - so they
+// create the account with `age: null`/`birthDate: ''` and defer the check to
+// here instead of skipping it outright. The mobile app's VibeKurulumu.tsx
+// shows a mandatory birth-date field only when `user.age == null`, and this
+// is where that gets validated before onboarding can complete.
 routes.push({
   method: 'POST',
   path: '/api/users/me/vibe-setup',
   handler: async (req, res, params, body) => {
     const userId = requireAuth(req, res);
     if (userId === null) return;
+    const existing = db.findById('users', userId);
+    if (!existing) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+
     const patch = buildPatch(body);
     const blockedReason = findBlockedProfileText(patch);
     if (blockedReason) return res.status(422).json({ error: blockedReason });
+
+    // Only accepted (and only matters) once, for an account that has never
+    // had its age verified - an already-verified account (age is a number,
+    // set either at /register or by a previous call here) can't submit a
+    // new birthDate through this endpoint at all; age, once verified, is as
+    // immutable as the location lock in applyLocationLock above.
+    if (existing.age === null || existing.age === undefined) {
+      const birthDate = typeof body.birthDate === 'string' ? body.birthDate.trim() : '';
+      if (!birthDate) {
+        return res.status(400).json({ error: 'Devam etmek için doğum tarihini girmelisin.' });
+      }
+      const age = computeAge(birthDate);
+      if (age === null) {
+        return res.status(400).json({ error: 'Doğum tarihini GG/AA/YYYY formatında gir.' });
+      }
+      if (age < 18) {
+        return res.status(400).json({ error: 'SparkR’a katılmak için 18 yaşından büyük olmalısın.' });
+      }
+      patch.birthDate = birthDate;
+      patch.age = age;
+    }
+
     patch.onboardingComplete = true;
     const row = db.update('users', userId, patch);
     if (!row) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
@@ -194,6 +269,7 @@ routes.push({
     }
     const row = db.findById('users', targetId);
     if (!row) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    recordProfileView(userId, targetId);
     res.json({ user: toPublicProfile(row) });
   },
 });

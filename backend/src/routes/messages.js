@@ -16,6 +16,10 @@ function serializeMessage(row) {
     text: row.text,
     imageUrl: row.imageUrl,
     createdAt: row.createdAt,
+    // null until the RECIPIENT's chat screen has fetched it (see the GET
+    // handler below) - drives the "İletildi" (gray) vs "Okundu" (colored)
+    // tick shown on the sender's own outgoing bubbles in the mobile app.
+    readAt: row.readAt || null,
   };
 }
 
@@ -40,6 +44,26 @@ routes.push({
     if (userId === null) return;
     const match = loadMyMatch(Number(params.id), userId);
     if (!match) return res.status(404).json({ error: 'Eşleşme bulunamadı' });
+
+    // The chat screen only polls this endpoint while it's focused (see
+    // DenizIleSohbet.tsx's useFocusEffect), so a fetch here is a real signal
+    // that the caller can currently see this conversation - mark every
+    // message the OTHER person sent as read, right now, if it isn't
+    // already. Read receipts only ever flow this direction: fetching your
+    // own sent messages never marks them read (that'd be marking your own
+    // messages read for yourself, which is meaningless).
+    //
+    // Gated on the READER's own readReceiptsEnabled setting (default true) -
+    // turning it off means other people never find out you've read their
+    // messages, same trade-off WhatsApp/Instagram make for this toggle.
+    const me = db.findById('users', userId);
+    const readReceiptsEnabled = !me || me.readReceiptsEnabled !== false;
+    if (readReceiptsEnabled) {
+      const readNow = new Date().toISOString();
+      db.filter('messages', (m) => m.matchId === match.id && m.senderId !== userId && !m.readAt).forEach((m) =>
+        db.update('messages', m.id, { readAt: readNow })
+      );
+    }
 
     let rows = db.filter('messages', (m) => m.matchId === match.id).sort((a, b) => a.id - b.id);
     const afterId = Number(query.afterId);

@@ -3,29 +3,10 @@ const db = require('../db');
 const { signToken, hashPassword, verifyPassword, requireAuth } = require('../auth');
 const { toPublicUser } = require('../serialize');
 const { verifyGoogleIdToken } = require('../google-verify');
+const { verifyAppleIdToken } = require('../apple-verify');
 const { verifyFacebookAccessToken, exchangeFacebookCode } = require('../facebook-verify');
 const { containsBlockedText } = require('../moderation');
-
-function computeAge(birthDate) {
-  if (!birthDate) return null;
-  const parts = String(birthDate)
-    .split(/[/\-.]/)
-    .map((p) => parseInt(p, 10));
-  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
-  let day, month, year;
-  if (parts[0] > 31) {
-    [year, month, day] = parts;
-  } else {
-    [day, month, year] = parts;
-  }
-  const dob = new Date(year, (month || 1) - 1, day || 1);
-  if (Number.isNaN(dob.getTime())) return null;
-  const now = new Date();
-  let age = now.getFullYear() - dob.getFullYear();
-  const m = now.getMonth() - dob.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
-  return age;
-}
+const { computeAge } = require('../age');
 
 function validatePassword(password) {
   if (typeof password !== 'string' || password.length < 8) return 'Şifre en az 8 karakter olmalı';
@@ -107,6 +88,12 @@ routes.push({
       bio: '',
       city: 'İstanbul',
       neighbourhood: '',
+      // Placeholder city above, not a real one - see routes/users.js's
+      // location-lock logic. Left false here so the app asks for (and then
+      // permanently locks in) the person's real GPS-detected city right
+      // after this first login, instead of letting "İstanbul" silently
+      // stick around as their location forever.
+      locationConfirmed: false,
       avatarUrl: '',
       gallery: [],
       musicTags: [],
@@ -229,6 +216,7 @@ routes.push({
         bio: '',
         city: 'İstanbul',
         neighbourhood: '',
+        locationConfirmed: false,
         avatarUrl: payload.picture || '',
         gallery: [],
         musicTags: [],
@@ -247,6 +235,89 @@ routes.push({
       });
     } else if (!row.avatarUrl && payload.picture) {
       row = db.update('users', row.id, { avatarUrl: payload.picture });
+    }
+
+    const token = signToken(row.id);
+    res.json({ token, user: toPublicUser(row) });
+  },
+});
+
+routes.push({
+  method: 'POST',
+  path: '/api/auth/apple',
+  handler: async (req, res, params, body) => {
+    const idToken = body.idToken;
+    if (!idToken) return res.status(400).json({ error: 'Apple kimlik jetonu gerekli.' });
+
+    let payload;
+    try {
+      payload = await verifyAppleIdToken(idToken, process.env.APPLE_CLIENT_ID);
+    } catch (err) {
+      return res.status(401).json({ error: err.message || 'Apple ile doğrulama başarısız.' });
+    }
+
+    // Apple's `sub` (its own stable per-app user id) is ALWAYS present, but
+    // `email` is only ever included in the token on the very FIRST
+    // authorization someone grants this app - every later sign-in comes
+    // back without it. So accounts are keyed primarily on `appleUserId`
+    // (=sub), with `contact` only used as a fallback lookup/display value -
+    // the opposite priority from the Google/Facebook routes above, where
+    // email is always present and is the primary key.
+    let row = db.find('users', (u) => u.appleUserId === payload.sub);
+
+    if (!row && payload.email) {
+      // First-time sign-in, or an existing email/password/Google/Facebook
+      // account whose address happens to match this Apple ID - link them
+      // rather than creating a duplicate account. Apple only reports
+      // `email` once verified on Apple's side, so this is as trustworthy as
+      // the Google linking case above.
+      row = db.find('users', (u) => u.contact === String(payload.email).trim().toLowerCase());
+    }
+
+    if (row) {
+      if (!row.appleUserId) row = db.update('users', row.id, { appleUserId: payload.sub });
+    } else {
+      // `fullName` only ever arrives from the CLIENT (Apple hands it to the
+      // app directly on the native sign-in sheet, never inside the identity
+      // token itself, and only on that same first authorization) - see
+      // src/utils/appleAuth.ts. Falls back to a synthetic contact the same
+      // way the Facebook route does when there's no email to key on either
+      // (a private-relay email is still a usable one - `is_private_email`
+      // just means Apple is forwarding it, not that it's absent).
+      const contact = payload.email
+        ? String(payload.email).trim().toLowerCase()
+        : `apple_${payload.sub}@apple.sparkr`;
+      // Same known gap as Google/Facebook above: Apple doesn't share a
+      // birth date, so age/birthDate stay empty - the 18+ gate already ran
+      // on Apple's side (Apple ID's own minimum age) when this iCloud
+      // account was created.
+      row = db.insert('users', {
+        name: (typeof body.fullName === 'string' && body.fullName.trim()) || contact.split('@')[0],
+        contact,
+        appleUserId: payload.sub,
+        passwordHash: hashPassword(crypto.randomBytes(24).toString('hex')),
+        birthDate: '',
+        age: null,
+        bio: '',
+        city: 'İstanbul',
+        neighbourhood: '',
+        locationConfirmed: false,
+        avatarUrl: '',
+        gallery: [],
+        musicTags: [],
+        vibeTags: [],
+        mood: 'Chill',
+        ageRangeMin: 24,
+        ageRangeMax: 34,
+        discoveryRadiusKm: 12,
+        voiceNoteUrl: '',
+        verified: true,
+        isBot: false,
+        onboardingComplete: false,
+        phoneVerified: false,
+        distanceKm: 0,
+        favoriteTrack: '',
+      });
     }
 
     const token = signToken(row.id);
@@ -316,6 +387,7 @@ routes.push({
         bio: '',
         city: 'İstanbul',
         neighbourhood: '',
+        locationConfirmed: false,
         avatarUrl: profile.picture || '',
         gallery: [],
         musicTags: [],

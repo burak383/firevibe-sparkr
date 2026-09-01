@@ -1,5 +1,20 @@
 require('./env');
 const crypto = require('crypto');
+const db = require('./db');
+
+// How fresh `lastActiveAt` needs to be before requireAuth bothers touching
+// it again - every authenticated request would otherwise write to disk,
+// which is wasteful for something only ever displayed rounded to minutes
+// anyway (see isOnline()/presenceLabel() on the mobile side).
+const LAST_ACTIVE_THROTTLE_MS = 60 * 1000;
+
+function touchLastActive(userId) {
+  const row = db.findById('users', userId);
+  if (!row) return;
+  const last = row.lastActiveAt ? new Date(row.lastActiveAt).getTime() : 0;
+  if (Date.now() - last < LAST_ACTIVE_THROTTLE_MS) return;
+  db.update('users', userId, { lastActiveAt: new Date().toISOString() });
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-secret-change-me';
 const JWT_EXPIRES_DAYS = Number(process.env.JWT_EXPIRES_DAYS || 30);
@@ -80,6 +95,7 @@ function requireAuth(req, res) {
     res.status(401).json({ error: 'Oturumun sona ermiş. Lütfen tekrar giriş yap.' });
     return null;
   }
+  touchLastActive(payload.userId);
   return payload.userId;
 }
 

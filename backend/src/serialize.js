@@ -1,4 +1,4 @@
-const { getSwipeStatus } = require('./subscription');
+const { getSwipeStatus, getSuperlikeStatus, hasActiveBoost } = require('./subscription');
 
 function toPublicUser(row) {
   if (!row) return null;
@@ -11,6 +11,10 @@ function toPublicUser(row) {
     bio: row.bio || '',
     city: row.city || 'İstanbul',
     neighbourhood: row.neighbourhood || '',
+    // Once true, routes/users.js refuses to change city/neighbourhood again
+    // (see buildPatch/applyLocationLock there) - the client uses this to
+    // show the "Şehir"/"Semt" fields as read-only instead of editable.
+    locationConfirmed: !!row.locationConfirmed,
     avatarUrl: row.avatarUrl || '',
     gallery: row.gallery || [],
     musicTags: row.musicTags || [],
@@ -25,6 +29,11 @@ function toPublicUser(row) {
     onboardingComplete: !!row.onboardingComplete,
     phoneVerified: !!row.phoneVerified,
     visible: row.visible !== false,
+    // Own-account only, default on - whether reading someone else's message
+    // stamps `readAt` on it at all (see routes/messages.js's GET handler).
+    // Nobody else's business what this is set to, same reasoning as
+    // `visible`/`onboardingComplete` above.
+    readReceiptsEnabled: row.readReceiptsEnabled !== false,
     distanceKm: row.distanceKm ?? 2.4,
     favoriteTrack: row.favoriteTrack || '',
     createdAt: row.createdAt,
@@ -32,6 +41,15 @@ function toPublicUser(row) {
     // premium is active. Not in toPublicProfile: nobody else needs to know
     // your subscription status.
     swipeStatus: getSwipeStatus(row),
+    // Separate Super Vibe (superlike) allowance - 0/day free, 5/day premium.
+    // See backend/src/subscription.js's consumeSuperlike/getSuperlikeStatus.
+    superlikeStatus: getSuperlikeStatus(row),
+    // Own-account only, same reasoning as swipeStatus/superlikeStatus - a
+    // one-time "Boost" consumable purchase that puts you at the front of
+    // everyone's discovery deck for 30 minutes. See
+    // backend/src/subscription.js's hasActiveBoost/activateBoost.
+    boostActive: hasActiveBoost(row),
+    boostedUntil: row.boostedUntil || null,
   };
 }
 
@@ -63,6 +81,13 @@ function toPublicProfile(row) {
     isBot: !!row.isBot,
     distanceKm: row.distanceKm ?? 2.4,
     favoriteTrack: row.favoriteTrack || '',
+    // Bumped (throttled) on every authenticated request by auth.js's
+    // requireAuth - the mobile app derives "Aktif şimdi" / "X dk önce
+    // aktifti" from this (see utils/presence.ts) instead of a hardcoded
+    // label. Bots never actually authenticate, so they'd otherwise show as
+    // permanently offline despite replying instantly - always report them
+    // as active right now, matching how they behave everywhere else.
+    lastActiveAt: row.isBot ? new Date().toISOString() : row.lastActiveAt || null,
   };
 }
 
