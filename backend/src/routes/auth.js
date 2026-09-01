@@ -448,24 +448,22 @@ routes.push({
     const phone = normalizeContact(body.phone);
     if (!phone || phone.length < 5) return res.status(400).json({ error: 'Geçerli bir telefon numarası gir.' });
 
-    // Don't leak which numbers have accounts - always respond ok, but only
-    // actually issue a code (and return it below) if the number is registered.
-    const row = db.find('users', (u) => u.contact === phone);
-    let devCode;
-    if (row) {
-      const code = generateOtp();
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 5).toISOString();
-      db.insert('smsCodes', { phone, code, expiresAt, used: false });
-      console.log(`[auth] SMS doğrulama kodu (${phone}): ${code}`);
-      devCode = code;
-    }
+    // Phone+SMS is now the ONLY sign-in method (Google/Facebook/e-posta login
+    // removed from the app), so this doubles as registration - a code is
+    // issued for any valid-looking number, not just ones already tied to an
+    // account. /api/auth/sms/verify below creates the account on first
+    // successful verification (see the comment there).
+    const code = generateOtp();
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 5).toISOString();
+    db.insert('smsCodes', { phone, code, expiresAt, used: false });
+    console.log(`[auth] SMS doğrulama kodu (${phone}): ${code}`);
 
     res.json({
       ok: true,
-      message: 'Eğer bu numarayla bir hesap varsa, doğrulama kodu gönderildi.',
+      message: 'Doğrulama kodu gönderildi.',
       // Exposed only because this demo has no real SMS provider wired up -
       // in production this would be delivered via SMS, never in the response.
-      ...(devCode ? { devCode } : {}),
+      devCode: code,
     });
   },
 });
@@ -482,10 +480,50 @@ routes.push({
     if (!entry || new Date(entry.expiresAt).getTime() < Date.now()) {
       return res.status(400).json({ error: 'Kod hatalı veya süresi dolmuş.' });
     }
-    const row = db.find('users', (u) => u.contact === phone);
-    if (!row) return res.status(404).json({ error: 'Bu numarayla bir hesap bulunamadı.' });
-
     db.update('smsCodes', entry.id, { used: true });
+
+    let row = db.find('users', (u) => u.contact === phone);
+    if (!row) {
+      // First time this number has ever verified - since phone+SMS is the
+      // only sign-in method now, this doubles as account creation, the same
+      // way /api/auth/google|apple|facebook create one on first login.
+      // There's no name/birth date to collect here (no form before this
+      // point), so the same gap those routes have is closed the same way:
+      // VibeKurulumu (onboarding) asks for the missing birth date - see its
+      // `needsBirthDate` check, driven by `age === null` - and the person
+      // can set a real display name from there or the profile screen after.
+      row = db.insert('users', {
+        name: 'SparkR Kullanıcısı',
+        contact: phone,
+        passwordHash: hashPassword(crypto.randomBytes(24).toString('hex')),
+        birthDate: '',
+        age: null,
+        bio: '',
+        city: 'İstanbul',
+        neighbourhood: '',
+        locationConfirmed: false,
+        avatarUrl: '',
+        gallery: [],
+        musicTags: [],
+        vibeTags: [],
+        mood: 'Chill',
+        ageRangeMin: 24,
+        ageRangeMax: 34,
+        discoveryRadiusKm: 12,
+        voiceNoteUrl: '',
+        // The OTP just checked above IS the verification here - if anything
+        // stronger evidence of ownership than the Google/Facebook/Apple
+        // routes' "trust the provider" logic, since this exact device just
+        // proved it can receive codes sent to this exact number.
+        verified: true,
+        isBot: false,
+        onboardingComplete: false,
+        phoneVerified: true,
+        distanceKm: 0,
+        favoriteTrack: '',
+      });
+    }
+
     const token = signToken(row.id);
     res.json({ token, user: toPublicUser(row) });
   },
