@@ -25,13 +25,12 @@ import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 import { extractGoogleIdToken, isGoogleSignInConfigured, useGoogleAuthRequest } from '../utils/googleAuth';
-import { isFacebookSignInConfigured, promptFacebookLogin } from '../utils/facebookAuth';
 import { isAppleSignInAvailablePlatform, isAppleSignInAvailable, promptAppleSignIn } from '../utils/appleAuth';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 export default function LoginScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { login, loginWithGoogle, loginWithFacebook, loginWithApple } = useAuth();
+  const { login, loginWithGoogle, loginWithApple } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -40,7 +39,6 @@ export default function LoginScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
-  const [facebookSubmitting, setFacebookSubmitting] = useState(false);
   const [appleSubmitting, setAppleSubmitting] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
 
@@ -76,27 +74,6 @@ export default function LoginScreen() {
       return;
     }
     promptGoogleAsync();
-  };
-
-  const handleFacebookPress = async () => {
-    if (!isFacebookSignInConfigured) {
-      Alert.alert(
-        'Facebook ile giriş yapılandırılmamış',
-        'Bunu etkinleştirmek için mobile/.env dosyasına EXPO_PUBLIC_FACEBOOK_APP_ID değerini, backend/.env dosyasına da FACEBOOK_APP_ID ve FACEBOOK_APP_SECRET değerlerini eklemen gerekiyor. developers.facebook.com/apps üzerinde bir uygulama oluşturman yeterli - adımlar için .env.example dosyalarındaki notlara bak.'
-      );
-      return;
-    }
-    setFacebookSubmitting(true);
-    try {
-      const result = await promptFacebookLogin();
-      if (!result) return; // cancelled, denied, or something went wrong
-      await loginWithFacebook(result.code, result.redirectUri);
-      // RootNavigator swaps the stack automatically once `user` is set.
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Facebook ile giriş yapılamadı.');
-    } finally {
-      setFacebookSubmitting(false);
-    }
   };
 
   const handleApplePress = async () => {
@@ -314,19 +291,6 @@ export default function LoginScreen() {
                   <MaterialCommunityIcons name="google" size={19} color={colors.cardForeground} />
                 )}
                 <Text style={styles.socialText}>Google ile devam et</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.facebookButton}
-                onPress={handleFacebookPress}
-                disabled={facebookSubmitting}
-              >
-                {facebookSubmitting ? (
-                  <ActivityIndicator size="small" color={colors.cardForeground} />
-                ) : (
-                  <MaterialCommunityIcons name="facebook" size={19} color={colors.cardForeground} />
-                )}
-                <Text style={styles.socialText}>Facebook ile devam et</Text>
               </Pressable>
 
               {appleAvailable && (
@@ -667,21 +631,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: colors.background,
   },
-  facebookButton: {
-    height: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 20,
-    backgroundColor: colors.background,
-  },
   // Apple's own Human Interface Guidelines call for a solid black (or
   // white, on a dark background) button rather than the outlined style used
-  // for Google/Facebook above - matching that here rather than reusing
-  // googleButton/facebookButton's look.
+  // for Google above - matching that here rather than reusing
+  // googleButton's look.
   appleButton: {
     height: 52,
     flexDirection: 'row',

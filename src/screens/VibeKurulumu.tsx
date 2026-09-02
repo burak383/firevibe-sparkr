@@ -129,6 +129,15 @@ export default function SparkRProfileScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Google/Apple sign-in accounts never collect a birth date at
+  // signup (see routes/auth.js's comments on each of those three routes) -
+  // `age` stays null until this screen collects it, right here, as the
+  // last gate before onboarding can complete. See
+  // backend/src/routes/users.js's vibe-setup handler for where this is
+  // actually enforced (18+ check, same as the direct-registration flow).
+  const needsBirthDate = !!user && user.age == null;
+  const [birthDateInput, setBirthDateInput] = useState('');
+
   const [editingProfile, setEditingProfile] = useState(false);
   const [editName, setEditName] = useState(user?.name ?? '');
   const [editBio, setEditBio] = useState(user?.bio ?? '');
@@ -287,6 +296,10 @@ export default function SparkRProfileScreen() {
 
   const handleIgnite = async () => {
     setError(null);
+    if (needsBirthDate && !birthDateInput.trim()) {
+      setError('Devam etmek için doğum tarihini girmelisin.');
+      return;
+    }
     setSubmitting(true);
     try {
       await completeVibeSetup({
@@ -297,6 +310,10 @@ export default function SparkRProfileScreen() {
         ageRangeMax,
         discoveryRadiusKm,
         favoriteTrack: user?.favoriteTrack || '',
+        // Only sent (and only matters) once - see backend/src/routes/users.js's
+        // vibe-setup handler, which ignores this entirely once age is
+        // already verified.
+        ...(needsBirthDate ? { birthDate: birthDateInput.trim() } : {}),
       });
       // RootNavigator swaps to the main app automatically once onboardingComplete is true.
     } catch (err) {
@@ -541,6 +558,26 @@ export default function SparkRProfileScreen() {
             </View>
           </View>
 
+          {needsBirthDate && (
+            <View style={styles.card}>
+              <View style={styles.cardPadding}>
+                <SectionHeader eyebrow="Son adım" title="Doğum tarihin" />
+                <Text style={styles.smallDescription}>
+                  Google/Apple hesabınla giriş yaptığın için doğum tarihini paylaşmadılar - SparkR’a
+                  yalnızca 18 yaşından büyükler katılabilir, bu yüzden devam etmeden önce bunu bizden gizleyemezsin.
+                </Text>
+                <TextInput
+                  value={birthDateInput}
+                  onChangeText={setBirthDateInput}
+                  placeholder="GG/AA/YYYY"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="numbers-and-punctuation"
+                  style={[styles.modalInput, { marginTop: 12 }]}
+                />
+              </View>
+            </View>
+          )}
+
           <View style={styles.card}>
             <View style={styles.cardPadding}>
               <View style={styles.phoneRow}>
@@ -569,10 +606,13 @@ export default function SparkRProfileScreen() {
 
       <View style={styles.footer}>
         <Pressable
-          style={[styles.primaryButton, submitting && styles.disabledButton]}
+          style={[
+            styles.primaryButton,
+            (submitting || (needsBirthDate && !birthDateInput.trim())) && styles.disabledButton,
+          ]}
           accessibilityRole="button"
           onPress={handleIgnite}
-          disabled={submitting}
+          disabled={submitting || (needsBirthDate && !birthDateInput.trim())}
         >
           {submitting ? (
             <ActivityIndicator color={colors.primaryForeground} />

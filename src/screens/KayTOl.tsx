@@ -21,7 +21,6 @@ import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 import { extractGoogleIdToken, isGoogleSignInConfigured, useGoogleAuthRequest } from '../utils/googleAuth';
-import { isFacebookSignInConfigured, promptFacebookLogin } from '../utils/facebookAuth';
 import { isAppleSignInAvailablePlatform, isAppleSignInAvailable, promptAppleSignIn } from '../utils/appleAuth';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -56,7 +55,7 @@ function formatBirthDateInput(value: string): string {
 
 export default function CreateAccountScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { register, loginWithGoogle, loginWithFacebook, loginWithApple } = useAuth();
+  const { register, loginWithGoogle, loginWithApple } = useAuth();
 
   const [name, setName] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -66,7 +65,6 @@ export default function CreateAccountScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
-  const [facebookSubmitting, setFacebookSubmitting] = useState(false);
   const [appleSubmitting, setAppleSubmitting] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
 
@@ -102,27 +100,6 @@ export default function CreateAccountScreen() {
       return;
     }
     promptGoogleAsync();
-  };
-
-  const handleFacebookPress = async () => {
-    if (!isFacebookSignInConfigured) {
-      Alert.alert(
-        'Facebook ile kayıt yapılandırılmamış',
-        'Bunu etkinleştirmek için mobile/.env dosyasına EXPO_PUBLIC_FACEBOOK_APP_ID değerini, backend/.env dosyasına da FACEBOOK_APP_ID ve FACEBOOK_APP_SECRET değerlerini eklemen gerekiyor. Adımlar için .env.example dosyalarındaki notlara bak.'
-      );
-      return;
-    }
-    setFacebookSubmitting(true);
-    try {
-      const result = await promptFacebookLogin();
-      if (!result) return; // cancelled, denied, or something went wrong
-      await loginWithFacebook(result.code, result.redirectUri);
-      // RootNavigator moves to onboarding/main app automatically once `user` is set.
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Facebook ile kayıt olunamadı.');
-    } finally {
-      setFacebookSubmitting(false);
-    }
   };
 
   const handleApplePress = async () => {
@@ -339,19 +316,6 @@ export default function CreateAccountScreen() {
                   <FontAwesome5 name="google" size={17} color={colors.cardForeground} />
                 )}
                 <Text style={styles.googleText}>Google ile devam et</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.facebookButton}
-                onPress={handleFacebookPress}
-                disabled={facebookSubmitting}
-              >
-                {facebookSubmitting ? (
-                  <ActivityIndicator size="small" color={colors.cardForeground} />
-                ) : (
-                  <FontAwesome5 name="facebook" size={17} color={colors.cardForeground} />
-                )}
-                <Text style={styles.googleText}>Facebook ile devam et</Text>
               </Pressable>
 
               {appleAvailable && (
@@ -664,18 +628,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 9,
   },
-  facebookButton: {
-    marginTop: 12,
-    minHeight: 55,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 9,
-  },
   googleText: {
     color: colors.cardForeground,
     fontFamily: fonts.heading,
@@ -684,7 +636,7 @@ const styles = StyleSheet.create({
   },
   // Apple's Human Interface Guidelines call for a solid black (or white, on
   // a dark background) button rather than the outlined style used for
-  // Google/Facebook above.
+  // Google above.
   appleButton: {
     marginTop: 12,
     minHeight: 55,

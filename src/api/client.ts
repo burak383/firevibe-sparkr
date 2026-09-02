@@ -199,13 +199,6 @@ export const api = {
       auth: false,
     }),
 
-  facebookLogin: (code: string, redirectUri: string) =>
-    request<{ token: string; user: User }>('/api/auth/facebook', {
-      method: 'POST',
-      body: { code, redirectUri },
-      auth: false,
-    }),
-
   // `fullName` is only ever present on someone's very first Apple sign-in
   // (see utils/appleAuth.ts) - undefined on every later call, which the
   // backend already expects (see routes/auth.js's POST /api/auth/apple).

@@ -25,7 +25,7 @@ export const isAppleSignInAvailablePlatform = Platform.OS === 'ios';
 
 /**
  * True only once the native module can actually be asked - still needs an
- * await, unlike the Google/Facebook "is configured" checks, because Apple's
+ * await, unlike the Google "is configured" check, because Apple's
  * own SDK is what decides this (iOS version, iCloud sign-in state, real
  * device vs an unsupported simulator config), not just an env var we set.
  * Returns false immediately (no native call at all) on Android/web.
@@ -50,7 +50,7 @@ export interface AppleSignInResult {
 /**
  * Runs the real native "Sign in with Apple" sheet. Returns null on
  * cancellation (the person dismissed the sheet) rather than throwing -
- * callers should treat that the same as a cancelled Google/Facebook prompt
+ * callers should treat that the same as a cancelled Google prompt
  * (just stop silently, no error banner).
  */
 export async function promptAppleSignIn(): Promise<AppleSignInResult | null> {
