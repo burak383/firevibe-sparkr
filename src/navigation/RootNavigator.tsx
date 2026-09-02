@@ -15,6 +15,8 @@ import { configurePurchases } from '../utils/subscription';
 import { detectCityFromLocation } from '../utils/location';
 
 import LoginScreen from '../screens/Giri';
+import RegisterScreen from '../screens/KayTOl';
+import ForgotPasswordScreen from '../screens/IfremiUnuttum';
 import VibeSetupScreen from '../screens/VibeKurulumu';
 import DeckScreen from '../screens/AlevDestesi';
 import RadarScreen from '../screens/VibeRadar';
@@ -30,6 +32,8 @@ import PremiumScreen from '../screens/Premium';
 
 export type RootStackParamList = {
   Login: undefined;
+  Register: undefined;
+  ForgotPassword: undefined;
   VibeSetup: undefined;
   Deck: undefined;
   Radar: undefined;
@@ -143,7 +147,11 @@ export default function RootNavigator() {
     <NavigationContainer ref={navigationRef} theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         {!user ? (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+          </>
         ) : !user.onboardingComplete ? (
           <Stack.Screen name="VibeSetup" component={VibeSetupScreen} />
         ) : (

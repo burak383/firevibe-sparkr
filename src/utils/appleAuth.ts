@@ -1,10 +1,8 @@
 import { Platform } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 
-// Wraps expo-apple-authentication for Sign in with Apple. Not currently
-// wired into any screen - Giri.tsx now only offers phone+SMS login (see
-// backend/src/routes/auth.js's /api/auth/sms/* handlers) - kept here in case
-// Apple sign-in comes back as an option later. Sign in with Apple is an
+// Wraps expo-apple-authentication for the "Apple ile devam et" button shown
+// only on iOS (see Giri.tsx/KayTOl.tsx) - Sign in with Apple is an
 // iOS/Apple-platform-only feature, there's no Android or web equivalent to
 // fall back to the way Google's web client id does.
 //
