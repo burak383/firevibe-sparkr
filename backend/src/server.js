@@ -84,8 +84,6 @@ const AUTH_LIMIT_PATHS = new Set([
   '/api/auth/register',
   '/api/auth/forgot-password',
   '/api/auth/reset-password',
-  '/api/auth/sms/request',
-  '/api/auth/sms/verify',
   '/api/auth/google',
 ]);
 

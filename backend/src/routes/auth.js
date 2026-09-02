@@ -7,7 +7,6 @@ const { verifyAppleIdToken } = require('../apple-verify');
 const { verifyFacebookAccessToken, exchangeFacebookCode } = require('../facebook-verify');
 const { containsBlockedText } = require('../moderation');
 const { computeAge } = require('../age');
-const { isSmsProviderConfigured, sendOtpSms } = require('../sms');
 
 function validatePassword(password) {
   if (typeof password !== 'string' || password.length < 8) return 'Şifre en az 8 karakter olmalı';
@@ -16,7 +15,7 @@ function validatePassword(password) {
   return null;
 }
 
-// Register/login/SMS all match on an exact string, but a phone number can be
+// Register/login match on an exact string, but a phone number can be
 // typed a dozen equivalent ways (spaces, dashes, leading 0 vs +90 country
 // code) - without normalizing, "0532 123 45 67" at signup and "05321234567"
 // at login silently fail to match. E-mails are left untouched beyond
@@ -157,7 +156,7 @@ routes.push({
     res.json({
       ok: true,
       message: 'Eğer bu bilgiyle bir hesap varsa, sıfırlama bağlantısı gönderildi.',
-      // Exposed only because this demo has no real SMS/e-mail provider wired up -
+      // Exposed only because this demo has no real e-mail provider wired up -
       // in production this would be delivered out-of-band, never in the response.
       devResetToken: token,
     });
@@ -435,77 +434,6 @@ routes.push({
     const qs = new URLSearchParams(query).toString();
     res.writeHead(302, { Location: `firevibe://facebook-auth${qs ? `?${qs}` : ''}` });
     res.end();
-  },
-});
-
-function generateOtp() {
-  return String(crypto.randomInt(100000, 1000000));
-}
-
-routes.push({
-  method: 'POST',
-  path: '/api/auth/sms/request',
-  handler: async (req, res, params, body) => {
-    const phone = normalizeContact(body.phone);
-    if (!phone || phone.length < 5) return res.status(400).json({ error: 'Geçerli bir telefon numarası gir.' });
-
-    // Don't leak which numbers have accounts - always respond ok, but only
-    // actually issue a code (and return it below) if the number is registered.
-    // Google/Facebook/Apple/e-posta are the primary sign-in methods again;
-    // "SMS ile giriş yap" (see Giri.tsx) is a login-only convenience for an
-    // already-registered number, not a registration path.
-    const row = db.find('users', (u) => u.contact === phone);
-    let devCode;
-    if (row) {
-      const code = generateOtp();
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 5).toISOString();
-      db.insert('smsCodes', { phone, code, expiresAt, used: false });
-      console.log(`[auth] SMS doğrulama kodu (${phone}): ${code}`);
-
-      if (isSmsProviderConfigured) {
-        try {
-          await sendOtpSms(phone, code);
-        } catch (err) {
-          // Don't fail the request over a delivery hiccup - the code is
-          // still valid in the DB above; log it so a real, persistent
-          // provider outage shows up somewhere instead of failing sign-in
-          // silently.
-          console.log('[auth] SMS gönderimi başarısız:', err instanceof Error ? err.message : err);
-        }
-      } else {
-        devCode = code;
-      }
-    }
-
-    res.json({
-      ok: true,
-      message: 'Eğer bu numarayla bir hesap varsa, doğrulama kodu gönderildi.',
-      // Only ever included when there's no real SMS provider wired up (see
-      // src/sms.js / ILETIMERKEZI_* in .env.example) - never expose the
-      // actual code once real delivery is live.
-      ...(devCode ? { devCode } : {}),
-    });
-  },
-});
-
-routes.push({
-  method: 'POST',
-  path: '/api/auth/sms/verify',
-  handler: async (req, res, params, body) => {
-    const phone = normalizeContact(body.phone);
-    const code = (body.code || '').trim();
-    if (!phone || !code) return res.status(400).json({ error: 'Telefon numarası ve kod gerekli.' });
-
-    const entry = db.find('smsCodes', (c) => c.phone === phone && c.code === code && !c.used);
-    if (!entry || new Date(entry.expiresAt).getTime() < Date.now()) {
-      return res.status(400).json({ error: 'Kod hatalı veya süresi dolmuş.' });
-    }
-    const row = db.find('users', (u) => u.contact === phone);
-    if (!row) return res.status(404).json({ error: 'Bu numarayla bir hesap bulunamadı.' });
-
-    db.update('smsCodes', entry.id, { used: true });
-    const token = signToken(row.id);
-    res.json({ token, user: toPublicUser(row) });
   },
 });
 
