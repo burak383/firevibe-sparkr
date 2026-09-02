@@ -4,7 +4,6 @@ const { signToken, hashPassword, verifyPassword, requireAuth } = require('../aut
 const { toPublicUser } = require('../serialize');
 const { verifyGoogleIdToken } = require('../google-verify');
 const { verifyAppleIdToken } = require('../apple-verify');
-const { verifyFacebookAccessToken, exchangeFacebookCode } = require('../facebook-verify');
 const { containsBlockedText } = require('../moderation');
 const { computeAge } = require('../age');
 
@@ -261,12 +260,12 @@ routes.push({
     // authorization someone grants this app - every later sign-in comes
     // back without it. So accounts are keyed primarily on `appleUserId`
     // (=sub), with `contact` only used as a fallback lookup/display value -
-    // the opposite priority from the Google/Facebook routes above, where
+    // the opposite priority from the Google route above, where
     // email is always present and is the primary key.
     let row = db.find('users', (u) => u.appleUserId === payload.sub);
 
     if (!row && payload.email) {
-      // First-time sign-in, or an existing email/password/Google/Facebook
+      // First-time sign-in, or an existing email/password/Google
       // account whose address happens to match this Apple ID - link them
       // rather than creating a duplicate account. Apple only reports
       // `email` once verified on Apple's side, so this is as trustworthy as
@@ -280,14 +279,14 @@ routes.push({
       // `fullName` only ever arrives from the CLIENT (Apple hands it to the
       // app directly on the native sign-in sheet, never inside the identity
       // token itself, and only on that same first authorization) - see
-      // src/utils/appleAuth.ts. Falls back to a synthetic contact the same
-      // way the Facebook route does when there's no email to key on either
-      // (a private-relay email is still a usable one - `is_private_email`
-      // just means Apple is forwarding it, not that it's absent).
+      // src/utils/appleAuth.ts. Falls back to a synthetic contact when
+      // there's no email to key on either (a private-relay email is still a
+      // usable one - `is_private_email` just means Apple is forwarding it,
+      // not that it's absent).
       const contact = payload.email
         ? String(payload.email).trim().toLowerCase()
         : `apple_${payload.sub}@apple.sparkr`;
-      // Same known gap as Google/Facebook above: Apple doesn't share a
+      // Same known gap as Google above: Apple doesn't share a
       // birth date, so age/birthDate stay empty - the 18+ gate already ran
       // on Apple's side (Apple ID's own minimum age) when this iCloud
       // account was created.
@@ -322,118 +321,6 @@ routes.push({
 
     const token = signToken(row.id);
     res.json({ token, user: toPublicUser(row) });
-  },
-});
-
-routes.push({
-  method: 'POST',
-  path: '/api/auth/facebook',
-  handler: async (req, res, params, body) => {
-    // Facebook's login dialog only accepts https:// redirect URIs in its
-    // "Valid OAuth Redirect URIs" setting - a bare custom URL scheme
-    // (`firevibe://...`) is rejected there even though it's the normal
-    // pattern for native apps elsewhere. So the mobile app runs the
-    // "Authorization Code" flow against THIS backend's own https callback
-    // URL (see GET /api/auth/facebook/callback below and
-    // src/utils/facebookAuth.ts) and hands us the resulting `code` - the
-    // app secret needed to redeem it never has to leave the server.
-    const code = body.code;
-    const redirectUri = body.redirectUri;
-    if (!code || !redirectUri) {
-      return res.status(400).json({ error: 'Facebook yetkilendirme kodu ve redirect URI gerekli.' });
-    }
-
-    let profile;
-    try {
-      const accessToken = await exchangeFacebookCode(
-        code,
-        process.env.FACEBOOK_APP_ID,
-        process.env.FACEBOOK_APP_SECRET,
-        redirectUri
-      );
-      profile = await verifyFacebookAccessToken(
-        accessToken,
-        process.env.FACEBOOK_APP_ID,
-        process.env.FACEBOOK_APP_SECRET
-      );
-    } catch (err) {
-      return res.status(401).json({ error: err.message || 'Facebook ile doğrulama başarısız.' });
-    }
-
-    // Not every Facebook account has a usable e-posta here - the person may
-    // have declined the "email" permission, or their account simply has
-    // none on file. Fall back to a synthetic-but-stable contact tied to
-    // their Facebook user id so they can still get an account. Keeping the
-    // "@" in it matters: normalizeContact() only reformats values that look
-    // like phone numbers (digits-only after stripping punctuation) and
-    // leaves anything containing "@" untouched - a bare "fb1234567890"
-    // would otherwise get mangled into a fake +90 phone number.
-    const contact = profile.email ? String(profile.email).trim().toLowerCase() : `fb_${profile.id}@facebook.sparkr`;
-    let row = db.find('users', (u) => u.contact === contact);
-
-    if (!row) {
-      // Same reasoning as /api/auth/google above: Facebook doesn't share a
-      // birth date over these permissions, so age/birthDate stay empty -
-      // the 18+ gate already happened when they created their Facebook
-      // account. Facebook's own minimum is 13, which is weaker than our
-      // 18+ rule, so this is the same known gap that already exists for
-      // Google sign-in, not a new one introduced here.
-      row = db.insert('users', {
-        name: profile.name || 'SparkR Kullanıcısı',
-        contact,
-        passwordHash: hashPassword(crypto.randomBytes(24).toString('hex')),
-        birthDate: '',
-        age: null,
-        bio: '',
-        city: 'İstanbul',
-        neighbourhood: '',
-        locationConfirmed: false,
-        avatarUrl: profile.picture || '',
-        gallery: [],
-        musicTags: [],
-        vibeTags: [],
-        mood: 'Chill',
-        ageRangeMin: 24,
-        ageRangeMax: 34,
-        discoveryRadiusKm: 12,
-        voiceNoteUrl: '',
-        verified: true,
-        isBot: false,
-        onboardingComplete: false,
-        phoneVerified: false,
-        distanceKm: 0,
-        favoriteTrack: '',
-      });
-    } else if (!row.avatarUrl && profile.picture) {
-      row = db.update('users', row.id, { avatarUrl: profile.picture });
-    }
-
-    const token = signToken(row.id);
-    res.json({ token, user: toPublicUser(row) });
-  },
-});
-
-routes.push({
-  method: 'GET',
-  path: '/api/auth/facebook/callback',
-  handler: async (req, res, params, body, query) => {
-    // Facebook's login dialog redirects the in-app browser HERE once the
-    // person approves (or denies) the login request, because this https
-    // address is the only kind its "Valid OAuth Redirect URIs" validator
-    // accepts (see the comment on POST /api/auth/facebook above - a custom
-    // scheme like "firevibe://..." gets rejected there outright). This
-    // route's only job is to immediately bounce the browser onward to the
-    // app's own custom scheme with the same query string (code/state, or
-    // error/error_description if the person cancelled) still attached -
-    // expo-web-browser's auth session (see
-    // mobile/src/utils/facebookAuth.ts) is watching for THAT scheme, not
-    // this https one, to know the flow is finished and hand control back to
-    // the app. No token exchange happens here - that only happens once the
-    // mobile app has the `code` and POSTs it to /api/auth/facebook, where
-    // the app secret can be used safely.
-    const qs = new URLSearchParams(query).toString();
-    res.writeHead(302, { Location: `firevibe://facebook-auth${qs ? `?${qs}` : ''}` });
-    res.end();
   },
 });
 

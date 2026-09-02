@@ -157,11 +157,11 @@ routes.push({
 
 // Convenience endpoint for the "Vibe Kurulumu" onboarding screen.
 //
-// Also doubles as the one-and-only place a Google/Facebook/Apple-created
+// Also doubles as the one-and-only place a Google/Apple-created
 // account ever gets to complete the 18+ age check that /api/auth/register
-// already enforces for direct email/password signups. Those three social
-// routes (see routes/auth.js) can't verify age themselves - none of Google,
-// Facebook, or Apple's basic sign-in scopes hand back a birth date - so they
+// already enforces for direct email/password signups. Those social
+// routes (see routes/auth.js) can't verify age themselves - neither Google
+// nor Apple's basic sign-in scopes hand back a birth date - so they
 // create the account with `age: null`/`birthDate: ''` and defer the check to
 // here instead of skipping it outright. The mobile app's VibeKurulumu.tsx
 // shows a mandatory birth-date field only when `user.age == null`, and this
