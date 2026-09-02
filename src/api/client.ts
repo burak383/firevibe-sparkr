@@ -1,5 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { DeckUser, FireHour, Match, Message, PublicProfile, SwipeStatus, User } from './types';
+import type {
+  DeckUser,
+  FireHour,
+  LikeEntry,
+  Match,
+  Message,
+  ProfileViewEntry,
+  PublicProfile,
+  SuperlikeStatus,
+  SwipeStatus,
+  User,
+} from './types';
 
 // Point this at your backend. For a physical device or Android emulator,
 // `localhost` won't reach your computer - set EXPO_PUBLIC_API_URL in a `.env`
@@ -121,16 +132,36 @@ export const api = {
 
   deck: () => request<{ deck: DeckUser[] }>('/api/discovery/deck'),
 
-  // `swipeStatus` is only populated for 'like'/'superlike' (a 'pass' never
-  // touches the daily limit at all, so the backend sends null for it) - see
-  // backend/src/routes/discovery.js.
+  // `swipeStatus` is only populated for 'like' and `superlikeStatus` only
+  // for 'superlike' (they're two separate pools - see
+  // backend/src/subscription.js); a 'pass' never touches either, so the
+  // backend sends null for both.
   swipe: (targetUserId: number, action: 'like' | 'pass' | 'superlike') =>
-    request<{ match: Match | null; swipeStatus: SwipeStatus | null }>('/api/discovery/swipe', {
-      method: 'POST',
-      body: { targetUserId, action },
-    }),
+    request<{ match: Match | null; swipeStatus: SwipeStatus | null; superlikeStatus: SuperlikeStatus | null }>(
+      '/api/discovery/swipe',
+      {
+        method: 'POST',
+        body: { targetUserId, action },
+      }
+    ),
+
+  // Undoes my own most recent swipe (any action), premium-only - see
+  // backend/src/routes/discovery.js. `profile` is the person to show again
+  // (re-inserted into the deck right where you were), or null if there was
+  // nothing to undo.
+  rewind: () => request<{ profile: DeckUser | null }>('/api/discovery/rewind', { method: 'POST' }),
 
   matches: () => request<{ matches: Match[] }>('/api/matches'),
+
+  // "Beğenenler" - `premium` says whether `likers` should render full
+  // (tappable/likeable) or locked (blurred, inert) - see Begeniler.tsx.
+  likesReceived: () => request<{ likers: LikeEntry[]; premium: boolean }>('/api/discovery/likes-received'),
+
+  // "Beğeniler" - always full/unlocked, see backend/src/routes/discovery.js.
+  likesSent: () => request<{ liked: LikeEntry[] }>('/api/discovery/likes-sent'),
+
+  // "Görüntüleyenler" - same premium-lock pattern as likesReceived.
+  profileViews: () => request<{ viewers: ProfileViewEntry[]; premium: boolean }>('/api/discovery/profile-views'),
 
   match: (id: number) => request<{ match: Match }>(`/api/matches/${id}`),
 
@@ -161,20 +192,6 @@ export const api = {
 
   uploadAudio: (dataUrl: string) => request<{ url: string }>('/api/uploads', { method: 'POST', body: { dataUrl } }),
 
-  requestSmsCode: (phone: string) =>
-    request<{ ok: boolean; message: string; devCode?: string }>('/api/auth/sms/request', {
-      method: 'POST',
-      body: { phone },
-      auth: false,
-    }),
-
-  verifySmsCode: (phone: string, code: string) =>
-    request<{ token: string; user: User }>('/api/auth/sms/verify', {
-      method: 'POST',
-      body: { phone, code },
-      auth: false,
-    }),
-
   googleLogin: (idToken: string) =>
     request<{ token: string; user: User }>('/api/auth/google', {
       method: 'POST',
@@ -186,6 +203,16 @@ export const api = {
     request<{ token: string; user: User }>('/api/auth/facebook', {
       method: 'POST',
       body: { code, redirectUri },
+      auth: false,
+    }),
+
+  // `fullName` is only ever present on someone's very first Apple sign-in
+  // (see utils/appleAuth.ts) - undefined on every later call, which the
+  // backend already expects (see routes/auth.js's POST /api/auth/apple).
+  appleLogin: (idToken: string, fullName?: string) =>
+    request<{ token: string; user: User }>('/api/auth/apple', {
+      method: 'POST',
+      body: { idToken, fullName },
       auth: false,
     }),
 

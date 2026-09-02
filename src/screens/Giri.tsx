@@ -4,7 +4,6 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -24,7 +23,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
-import { api, ApiError } from '../api/client';
+import { ApiError } from '../api/client';
 import { extractGoogleIdToken, isGoogleSignInConfigured, useGoogleAuthRequest } from '../utils/googleAuth';
 import { isFacebookSignInConfigured, promptFacebookLogin } from '../utils/facebookAuth';
 import { isAppleSignInAvailablePlatform, isAppleSignInAvailable, promptAppleSignIn } from '../utils/appleAuth';
@@ -32,7 +31,7 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 
 export default function LoginScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { login, loginWithSms, loginWithGoogle, loginWithFacebook, loginWithApple } = useAuth();
+  const { login, loginWithGoogle, loginWithFacebook, loginWithApple } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -111,59 +110,6 @@ export default function LoginScreen() {
       setError(err instanceof ApiError ? err.message : 'Apple ile giriş yapılamadı.');
     } finally {
       setAppleSubmitting(false);
-    }
-  };
-
-  const [smsModalOpen, setSmsModalOpen] = useState(false);
-  const [smsStep, setSmsStep] = useState<'phone' | 'code'>('phone');
-  const [smsPhone, setSmsPhone] = useState('');
-  const [smsCode, setSmsCode] = useState('');
-  const [smsSubmitting, setSmsSubmitting] = useState(false);
-  const [smsError, setSmsError] = useState<string | null>(null);
-  const [smsDevCode, setSmsDevCode] = useState<string | null>(null);
-
-  const openSmsLogin = () => {
-    setSmsModalOpen(true);
-    setSmsStep('phone');
-    setSmsPhone(identifier.includes('@') ? '' : identifier);
-    setSmsCode('');
-    setSmsError(null);
-    setSmsDevCode(null);
-  };
-
-  const requestSmsCode = async () => {
-    if (!smsPhone.trim()) {
-      setSmsError('Telefon numaranı gir.');
-      return;
-    }
-    setSmsError(null);
-    setSmsSubmitting(true);
-    try {
-      const res = await api.requestSmsCode(smsPhone.trim());
-      setSmsDevCode(res.devCode ?? null);
-      setSmsStep('code');
-    } catch (err) {
-      setSmsError(err instanceof ApiError ? err.message : 'Kod gönderilemedi, tekrar dene.');
-    } finally {
-      setSmsSubmitting(false);
-    }
-  };
-
-  const verifySmsAndLogin = async () => {
-    if (!smsCode.trim()) {
-      setSmsError('Doğrulama kodunu gir.');
-      return;
-    }
-    setSmsError(null);
-    setSmsSubmitting(true);
-    try {
-      await loginWithSms(smsPhone.trim(), smsCode.trim());
-      setSmsModalOpen(false);
-      // RootNavigator swaps the stack automatically once `user` is set.
-    } catch (err) {
-      setSmsError(err instanceof ApiError ? err.message : 'Kod doğrulanamadı, tekrar dene.');
-    } finally {
-      setSmsSubmitting(false);
     }
   };
 
@@ -393,11 +339,6 @@ export default function LoginScreen() {
                   <Text style={styles.appleText}>Apple ile devam et</Text>
                 </Pressable>
               )}
-
-              <Pressable style={styles.smsButton} onPress={openSmsLogin}>
-                <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.secondary} />
-                <Text style={styles.socialText}>SMS koduyla giriş yap</Text>
-              </Pressable>
             </View>
           </View>
 
@@ -414,72 +355,6 @@ export default function LoginScreen() {
           </Text>
         </View>
       </ScrollView>
-
-      <Modal visible={smsModalOpen} transparent animationType="fade" onRequestClose={() => setSmsModalOpen(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.smsBackdrop}>
-          <View style={styles.smsCard}>
-            <Text style={styles.smsTitle}>SMS koduyla giriş</Text>
-
-            {smsStep === 'phone' ? (
-              <>
-                <Text style={styles.label}>TELEFON NUMARAN</Text>
-                <TextInput
-                  value={smsPhone}
-                  onChangeText={setSmsPhone}
-                  keyboardType="phone-pad"
-                  placeholder="+90 555 000 00 00"
-                  placeholderTextColor={colors.mutedForeground}
-                  style={styles.smsInput}
-                  autoFocus
-                />
-                <Text style={styles.helperText}>
-                  Sadece daha önce SparkR’a bu numarayla kayıt olduysan giriş yapabilirsin.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.label}>DOĞRULAMA KODU</Text>
-                <TextInput
-                  value={smsCode}
-                  onChangeText={setSmsCode}
-                  keyboardType="number-pad"
-                  placeholder="6 haneli kod"
-                  placeholderTextColor={colors.mutedForeground}
-                  style={styles.smsInput}
-                  maxLength={6}
-                  autoFocus
-                />
-                {smsDevCode ? (
-                  <Text style={styles.smsDevHint}>
-                    Bu demoda gerçek SMS gönderilmiyor - kodun: {smsDevCode}
-                  </Text>
-                ) : null}
-              </>
-            )}
-
-            {smsError ? <Text style={styles.smsErrorText}>{smsError}</Text> : null}
-
-            <View style={styles.smsActions}>
-              <Pressable style={styles.smsCancelButton} onPress={() => setSmsModalOpen(false)}>
-                <Text style={styles.smsCancelText}>Vazgeç</Text>
-              </Pressable>
-              <Pressable
-                style={styles.smsSubmitButton}
-                onPress={smsStep === 'phone' ? requestSmsCode : verifySmsAndLogin}
-                disabled={smsSubmitting}
-              >
-                {smsSubmitting ? (
-                  <ActivityIndicator color={colors.primaryForeground} />
-                ) : (
-                  <Text style={styles.smsSubmitText}>
-                    {smsStep === 'phone' ? 'Kod gönder' : 'Doğrula ve giriş yap'}
-                  </Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -803,17 +678,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: colors.background,
   },
-  smsButton: {
-    height: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: colors.secondary,
-    borderRadius: 20,
-    backgroundColor: colors.muted,
-  },
   // Apple's own Human Interface Guidelines call for a solid black (or
   // white, on a dark background) button rather than the outlined style used
   // for Google/Facebook above - matching that here rather than reusing
@@ -869,88 +733,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 16,
     textAlign: 'center',
-  },
-  smsBackdrop: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  smsCard: {
-    width: '100%',
-    maxWidth: 360,
-    padding: 20,
-    borderRadius: 22,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  smsTitle: {
-    color: colors.foreground,
-    fontFamily: fonts.heading,
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 16,
-  },
-  smsInput: {
-    height: 49,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: colors.input,
-    borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.foreground,
-    fontFamily: fonts.body,
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 8,
-  },
-  smsDevHint: {
-    marginTop: 10,
-    color: colors.secondary,
-    fontFamily: fonts.body,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  smsErrorText: {
-    marginTop: 12,
-    color: colors.destructive,
-    fontFamily: fonts.body,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  smsActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 18,
-  },
-  smsCancelButton: {
-    flex: 1,
-    height: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-    backgroundColor: colors.muted,
-  },
-  smsCancelText: {
-    color: colors.mutedForeground,
-    fontFamily: fonts.body,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  smsSubmitButton: {
-    flex: 1,
-    height: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-  },
-  smsSubmitText: {
-    color: colors.primaryForeground,
-    fontFamily: fonts.body,
-    fontSize: 13,
-    fontWeight: '800',
   },
 });

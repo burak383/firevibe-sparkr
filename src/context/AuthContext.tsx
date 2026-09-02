@@ -6,9 +6,9 @@ interface AuthContextValue {
   user: User | null;
   initializing: boolean;
   login: (identifier: string, password: string) => Promise<User>;
-  loginWithSms: (phone: string, code: string) => Promise<User>;
   loginWithGoogle: (idToken: string) => Promise<User>;
   loginWithFacebook: (code: string, redirectUri: string) => Promise<User>;
+  loginWithApple: (idToken: string, fullName?: string) => Promise<User>;
   register: (payload: { name: string; birthDate: string; contact: string; password: string }) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<User | null>;
@@ -52,13 +52,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return loggedInUser;
   }, []);
 
-  const loginWithSms = useCallback(async (phone: string, code: string) => {
-    const { token, user: loggedInUser } = await api.verifySmsCode(phone, code);
-    await setToken(token);
-    setUser(loggedInUser);
-    return loggedInUser;
-  }, []);
-
   const loginWithGoogle = useCallback(async (idToken: string) => {
     const { token, user: loggedInUser } = await api.googleLogin(idToken);
     await setToken(token);
@@ -68,6 +61,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithFacebook = useCallback(async (code: string, redirectUri: string) => {
     const { token, user: loggedInUser } = await api.facebookLogin(code, redirectUri);
+    await setToken(token);
+    setUser(loggedInUser);
+    return loggedInUser;
+  }, []);
+
+  // `fullName` is only ever available from the native Apple sign-in sheet on
+  // someone's very FIRST authorization (see utils/appleAuth.ts) - undefined
+  // on every later sign-in, which is fine since the backend only uses it
+  // once too (see routes/auth.js's POST /api/auth/apple).
+  const loginWithApple = useCallback(async (idToken: string, fullName?: string) => {
+    const { token, user: loggedInUser } = await api.appleLogin(idToken, fullName);
     await setToken(token);
     setUser(loggedInUser);
     return loggedInUser;
@@ -130,9 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       initializing,
       login,
-      loginWithSms,
       loginWithGoogle,
       loginWithFacebook,
+      loginWithApple,
       register,
       logout,
       refreshUser,
@@ -144,9 +148,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       initializing,
       login,
-      loginWithSms,
       loginWithGoogle,
       loginWithFacebook,
+      loginWithApple,
       register,
       logout,
       refreshUser,
