@@ -99,8 +99,8 @@ export default function SelfieVerificationScreen() {
 
         <Text style={styles.title}>Gerçek bir insan olduğunu göster</Text>
         <Text style={styles.subtitle}>
-          Kamerayla canlı bir selfie çek. Bunu profil fotoğrafınla karşılaştırıp doğrulanmış rozetini açacağız - eski
-          bir fotoğraf seçmek yerine şimdi çekmen gerekiyor.
+          Kamerayla canlı bir selfie çek, doğrulanmış rozetini açalım - eski bir fotoğraf seçmek yerine şimdi
+          çekmen gerekiyor.
         </Text>
 
         <View style={styles.tipRow}>

@@ -582,13 +582,12 @@ export default function SparkRProfileScreen() {
             <View style={styles.cardPadding}>
               <View style={styles.phoneRow}>
                 <View style={styles.phoneIcon}>
-                  <MaterialCommunityIcons name="phone-check-outline" size={21} color={colors.primary} />
+                  <MaterialCommunityIcons name="shield-check-outline" size={21} color={colors.primary} />
                 </View>
                 <View style={styles.phoneCopy}>
-                  <Text style={styles.phoneTitle}>Telefonun doğrulandı</Text>
-                  <Text style={styles.smallDescription}>Topluluğumuzu gerçek ve güvenli tutuyoruz.</Text>
+                  <Text style={styles.phoneTitle}>Hesabın güvende</Text>
+                  <Text style={styles.smallDescription}>Bilgilerin şifrelenerek saklanır, topluluğumuzu güvenli tutuyoruz.</Text>
                 </View>
-                <MaterialCommunityIcons name="check-circle" size={22} color={colors.success} />
               </View>
               {error && (
                 <View style={styles.errorRow}>

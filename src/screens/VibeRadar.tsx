@@ -19,6 +19,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../theme';
 import { api, ApiError } from '../api/client';
+import { isOnline } from '../utils/presence';
 import type { FireHour, Match, PublicProfile } from '../api/types';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import MainTabBar from '../components/MainTabBar';
@@ -40,11 +41,13 @@ function Avatar({
   size,
   ringColor,
   featured = false,
+  online = false,
 }: {
   uri: string;
   size: number;
   ringColor: string;
   featured?: boolean;
+  online?: boolean;
 }) {
   return (
     <View
@@ -53,7 +56,7 @@ function Avatar({
       <View style={[styles.avatarClip, { width: size, height: size }]}>
         <Image source={{ uri }} style={styles.image} />
       </View>
-      <View style={styles.onlineDot} />
+      {online && <View style={styles.onlineDot} />}
       {featured && <View style={styles.sparkDot} />}
     </View>
   );
@@ -226,6 +229,7 @@ export default function VibeRadarScreen() {
                       size={68}
                       ringColor={[theme.colors.primary, theme.colors.secondary, theme.colors.accent][i % 3]}
                       featured={i === 0}
+                      online={isOnline(person.lastActiveAt)}
                     />
                     <Text style={styles.personName}>{person.name}</Text>
                     <Text style={[styles.personLabel, { color: [theme.colors.primary, theme.colors.secondary, theme.colors.accent][i % 3] }]}>
@@ -257,7 +261,7 @@ export default function VibeRadarScreen() {
             <View style={styles.fireAction}>
               <Pressable
                 style={styles.primaryButton}
-                onPress={() => Alert.alert('Fire Hour', 'Fire Hour’a katıldın! Bu saatte keşif önceliğin artar.')}
+                onPress={() => Alert.alert('Fire Hour', 'Bu saatte bölgende herkes daha aktif oluyor - şimdi göz atmaya değer!')}
               >
                 <Icon name="radar" size={19} color={theme.colors.primaryForeground} />
                 <Text style={styles.primaryButtonText}>Radara Katıl</Text>
@@ -303,6 +307,7 @@ export default function VibeRadarScreen() {
                         uri={match.otherUser.avatarUrl}
                         size={54}
                         ringColor={[theme.colors.primary, theme.colors.secondary, theme.colors.accent][index % 3]}
+                        online={isOnline(match.otherUser.lastActiveAt)}
                       />
                     </Pressable>
                     <View style={styles.conversationBody}>
