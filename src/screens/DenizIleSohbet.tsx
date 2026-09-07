@@ -22,6 +22,7 @@ import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { api, ApiError } from '../api/client';
 import { pickAndUploadImage } from '../utils/media';
+import { isOnline, presenceLabel } from '../utils/presence';
 import type { Match, Message } from '../api/types';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -262,7 +263,7 @@ export default function DenizChatScreen() {
               accessibilityLabel={`${other.name} profilini gör`}
               onPress={() => navigation.navigate('ViewProfile', { userId: other.id })}
             >
-              <Avatar uri={other.avatarUrl} size={48} online style={styles.profileAvatar} />
+              <Avatar uri={other.avatarUrl} size={48} online={isOnline(other.lastActiveAt)} style={styles.profileAvatar} />
 
               <View style={styles.headerIdentity}>
                 <View style={styles.nameRow}>
@@ -274,8 +275,10 @@ export default function DenizChatScreen() {
                   </View>
                 </View>
                 <View style={styles.activeRow}>
-                  <View style={styles.activeDot} />
-                  <Text style={styles.activeText}>{otherTyping ? `${other.name} yazıyor...` : 'Aktif şimdi'}</Text>
+                  {(otherTyping || isOnline(other.lastActiveAt)) && <View style={styles.activeDot} />}
+                  <Text style={[styles.activeText, !otherTyping && !isOnline(other.lastActiveAt) && styles.inactiveText]}>
+                    {otherTyping ? `${other.name} yazıyor...` : presenceLabel(other.lastActiveAt)}
+                  </Text>
                 </View>
               </View>
             </Pressable>
@@ -387,7 +390,12 @@ export default function DenizChatScreen() {
                     ) : null}
                     <View style={fromMe ? styles.outgoingMeta : undefined}>
                       <Text style={fromMe ? styles.outgoingTime : styles.time}>{formatTime(message.createdAt)}</Text>
-                      {fromMe && <Icon name="check-all" size={15} color={colors.primaryForeground} />}
+                      {fromMe && (
+                        // Gray (primaryForeground) = "İletildi" (delivered,
+                        // not yet read) - colored (chart4) = "Okundu" (read).
+                        // See backend/src/routes/messages.js's readAt.
+                        <Icon name="check-all" size={15} color={message.readAt ? colors.chart4 : colors.primaryForeground} />
+                      )}
                     </View>
                   </Bubble>
                 </View>
@@ -503,6 +511,7 @@ const styles = StyleSheet.create({
   activeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
   activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
   activeText: { color: colors.success, fontFamily: fonts.body, fontSize: 12, fontWeight: '600' },
+  inactiveText: { color: colors.mutedForeground },
   optionsMenu: {
     position: 'absolute',
     top: 64,

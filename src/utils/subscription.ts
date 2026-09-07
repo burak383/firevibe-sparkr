@@ -85,3 +85,14 @@ export async function restorePurchases(): Promise<boolean> {
   const customerInfo = await Purchases.restorePurchases();
   return isPremiumActive(customerInfo);
 }
+
+// For one-time consumable products (Boost, extra Super Vibe packs) rather
+// than the subscription above - no entitlement to check afterwards, since
+// crediting the purchase (activateBoost / bonusSuperlikes) happens entirely
+// server-side once RevenueCat's webhook fires (see
+// backend/src/routes/subscription.js). Call refreshUser() after this
+// resolves so the UI picks up the credited state once the webhook has had a
+// moment to land.
+export async function purchaseConsumable(pkg: PurchasesPackage): Promise<void> {
+  await Purchases.purchasePackage(pkg);
+}

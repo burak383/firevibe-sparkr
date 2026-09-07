@@ -64,12 +64,23 @@ export default function RangeSlider({
 
   const usableWidth = Math.max(1, trackWidth - THUMB_SIZE);
 
+  // minResponder/maxResponder (below) are built once via useRef(...).current,
+  // so their gesture handlers are frozen at whatever the FIRST render's
+  // closures captured. On that first render `trackWidth` is still 0 (onLayout
+  // hasn't fired yet), which would pin `usableWidth` at 1 forever if the drag
+  // math read the plain variable above - turning a couple pixels of finger
+  // movement into the entire min-max range and flinging the thumb to one end
+  // on the slightest touch. Routing it through a ref (updated every render)
+  // instead means the frozen handlers always see the current, real width.
+  const usableWidthRef = useRef(usableWidth);
+  usableWidthRef.current = usableWidth;
+
   const valueToPosition = (v: number) => ((v - min) / (max - min)) * usableWidth;
 
   const roundToStep = (v: number) => Math.round(v / step) * step;
 
   const deltaToValue = (startValue: number, dx: number) => {
-    const deltaValue = (dx / usableWidth) * (max - min);
+    const deltaValue = (dx / usableWidthRef.current) * (max - min);
     return roundToStep(clampToRange(startValue + deltaValue));
   };
 

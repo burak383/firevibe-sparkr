@@ -119,6 +119,7 @@ export default function EditProfileScreen() {
   const [ageRangeMin, setAgeRangeMin] = useState(user?.ageRangeMin ?? 18);
   const [ageRangeMax, setAgeRangeMax] = useState(user?.ageRangeMax ?? 50);
   const [visible, setVisible] = useState(user?.visible ?? true);
+  const [readReceiptsEnabled, setReadReceiptsEnabled] = useState(user?.readReceiptsEnabled ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingField, setSavingField] = useState<string | null>(null);
@@ -296,6 +297,7 @@ export default function EditProfileScreen() {
         vibeTags,
         musicTags,
         visible,
+        readReceiptsEnabled,
       });
       navigation.goBack();
     } catch (err) {
@@ -433,32 +435,41 @@ export default function EditProfileScreen() {
               <View style={styles.column}>
                 <View style={styles.labelRow}>
                   <Text style={styles.label}>Şehir</Text>
-                  <Pressable
-                    accessibilityLabel="Konumu kullanarak şehri bul"
-                    onPress={handleDetectLocation}
-                    disabled={detectingLocation}
-                    style={styles.detectLocationLink}
-                  >
-                    {detectingLocation ? (
-                      <ActivityIndicator size="small" color={colors.secondary} />
-                    ) : (
-                      <>
-                        <Icon name="crosshairs-gps" size={13} color={colors.secondary} />
-                        <Text style={styles.detectLocationText}>Konumu bul</Text>
-                      </>
-                    )}
-                  </Pressable>
+                  {!user.locationConfirmed && (
+                    <Pressable
+                      accessibilityLabel="Konumu kullanarak şehri bul"
+                      onPress={handleDetectLocation}
+                      disabled={detectingLocation}
+                      style={styles.detectLocationLink}
+                    >
+                      {detectingLocation ? (
+                        <ActivityIndicator size="small" color={colors.secondary} />
+                      ) : (
+                        <>
+                          <Icon name="crosshairs-gps" size={13} color={colors.secondary} />
+                          <Text style={styles.detectLocationText}>Konumu bul</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  )}
                 </View>
-                <View style={styles.inputWrap}>
-                  <Icon name="map-marker-outline" size={18} color={colors.secondary} />
-                  <TextInput
-                    value={city}
-                    onChangeText={setCity}
-                    style={styles.input}
-                    accessibilityLabel="Şehir"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
-                </View>
+                {user.locationConfirmed ? (
+                  <View style={[styles.inputWrap, styles.disabledInput]}>
+                    <Icon name="map-marker-outline" size={18} color={colors.mutedForeground} />
+                    <Text style={styles.disabledText}>{city}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.inputWrap}>
+                    <Icon name="map-marker-outline" size={18} color={colors.secondary} />
+                    <TextInput
+                      value={city}
+                      onChangeText={setCity}
+                      style={styles.input}
+                      accessibilityLabel="Şehir"
+                      placeholderTextColor={colors.mutedForeground}
+                    />
+                  </View>
+                )}
               </View>
 
               <View style={styles.column}>
@@ -471,17 +482,29 @@ export default function EditProfileScreen() {
             </View>
 
             <Text style={styles.label}>Semt</Text>
-            <View style={styles.inputWrap}>
-              <Icon name="map-outline" size={18} color={colors.secondary} />
-              <TextInput
-                value={neighbourhood}
-                onChangeText={setNeighbourhood}
-                style={styles.input}
-                accessibilityLabel="Semt"
-                placeholder="ör. Kadıköy"
-                placeholderTextColor={colors.mutedForeground}
-              />
-            </View>
+            {user.locationConfirmed ? (
+              <View style={[styles.inputWrap, styles.disabledInput]}>
+                <Icon name="map-outline" size={18} color={colors.mutedForeground} />
+                <Text style={styles.disabledText}>{neighbourhood || 'Belirtilmedi'}</Text>
+              </View>
+            ) : (
+              <View style={styles.inputWrap}>
+                <Icon name="map-outline" size={18} color={colors.secondary} />
+                <TextInput
+                  value={neighbourhood}
+                  onChangeText={setNeighbourhood}
+                  style={styles.input}
+                  accessibilityLabel="Semt"
+                  placeholder="ör. Kadıköy"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+              </View>
+            )}
+            {user.locationConfirmed && (
+              <Text style={styles.locationLockedNote}>
+                Konumun doğrulandı ve değiştirilemez.
+              </Text>
+            )}
           </View>
         </Section>
 
@@ -617,6 +640,24 @@ export default function EditProfileScreen() {
             </View>
             <Pressable onPress={() => setVisible((v) => !v)} style={[styles.switchTrack, !visible && styles.switchTrackOff]}>
               <View style={[styles.switchThumb, !visible && styles.switchThumbOff]} />
+            </Pressable>
+          </View>
+
+          <View style={styles.visibilityCard}>
+            <View style={styles.visibilityIcon}>
+              <Icon name="check-all" size={19} color={colors.success} />
+            </View>
+            <View style={styles.visibilityText}>
+              <Text style={styles.itemTitle}>Okundu bilgisi</Text>
+              <Text style={styles.caption}>
+                {readReceiptsEnabled ? 'Mesajları okuduğunda karşı taraf görür' : 'Okundu bilgisi paylaşılmıyor'}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setReadReceiptsEnabled((v) => !v)}
+              style={[styles.switchTrack, !readReceiptsEnabled && styles.switchTrackOff]}
+            >
+              <View style={[styles.switchThumb, !readReceiptsEnabled && styles.switchThumbOff]} />
             </Pressable>
           </View>
         </Section>
@@ -1136,6 +1177,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 14,
     fontWeight: '700',
+  },
+  locationLockedNote: {
+    marginTop: 6,
+    color: colors.mutedForeground,
+    fontFamily: fonts.body,
+    fontSize: 12,
   },
   tagHint: {
     marginTop: 10,

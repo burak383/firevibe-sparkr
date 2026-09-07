@@ -24,7 +24,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
-import { extractGoogleIdToken, isGoogleSignInConfigured, useGoogleAuthRequest } from '../utils/googleAuth';
+import { isGoogleSignInConfigured, promptGoogleSignIn } from '../utils/googleAuth';
 import { isAppleSignInAvailablePlatform, isAppleSignInAvailable, promptAppleSignIn } from '../utils/appleAuth';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -47,25 +47,7 @@ export default function LoginScreen() {
     isAppleSignInAvailable().then(setAppleAvailable);
   }, []);
 
-  const [googleRequest, googleResponse, promptGoogleAsync] = useGoogleAuthRequest();
-
-  useEffect(() => {
-    const idToken = extractGoogleIdToken(googleResponse);
-    if (!idToken) return;
-    (async () => {
-      setGoogleSubmitting(true);
-      try {
-        await loginWithGoogle(idToken);
-        // RootNavigator swaps the stack automatically once `user` is set.
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : 'Google ile giriş yapılamadı.');
-      } finally {
-        setGoogleSubmitting(false);
-      }
-    })();
-  }, [googleResponse, loginWithGoogle]);
-
-  const handleGooglePress = () => {
+  const handleGooglePress = async () => {
     if (!isGoogleSignInConfigured) {
       Alert.alert(
         'Google ile giriş yapılandırılmamış',
@@ -73,7 +55,17 @@ export default function LoginScreen() {
       );
       return;
     }
-    promptGoogleAsync();
+    setGoogleSubmitting(true);
+    try {
+      const idToken = await promptGoogleSignIn();
+      if (!idToken) return; // cancelled
+      await loginWithGoogle(idToken);
+      // RootNavigator swaps the stack automatically once `user` is set.
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Google ile giriş yapılamadı.');
+    } finally {
+      setGoogleSubmitting(false);
+    }
   };
 
   const handleApplePress = async () => {
@@ -283,7 +275,7 @@ export default function LoginScreen() {
               <Pressable
                 style={styles.googleButton}
                 onPress={handleGooglePress}
-                disabled={googleSubmitting || (isGoogleSignInConfigured && !googleRequest)}
+                disabled={googleSubmitting}
               >
                 {googleSubmitting ? (
                   <ActivityIndicator size="small" color={colors.cardForeground} />

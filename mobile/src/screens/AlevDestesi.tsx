@@ -159,7 +159,6 @@ export default function SparkRScreen() {
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
-  const [rewinding, setRewinding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fireHour, setFireHour] = useState<FireHour | null>(null);
   const [activeCount, setActiveCount] = useState(0);
@@ -215,14 +214,11 @@ export default function SparkRScreen() {
   );
 
   const current = deck[index];
-  // True once there's truly no Super Vibe left to send - both the daily
-  // allowance (always 0 for free accounts, up to 5/day for premium) AND any
-  // purchased pack balance (see backend/src/subscription.js's
-  // addBonusSuperlikes/consumeSuperlike - the daily pool is always spent
-  // first) are used up. Drives the star button's disabled look and skips a
-  // doomed network round trip in favor of jumping straight to the paywall.
-  const superlikeExhausted =
-    !!superlikeStatus && superlikeStatus.remaining <= 0 && superlikeStatus.bonus <= 0;
+  // True once today's Super Vibe allowance is known to be used up - always
+  // true for free accounts (limit is 0), true for premium once the 5/day
+  // cap is hit. Drives the star button's disabled look and skips a doomed
+  // network round trip in favor of jumping straight to the paywall.
+  const superlikeExhausted = !!superlikeStatus && superlikeStatus.remaining <= 0;
 
   const handleSwipe = async (action: 'like' | 'pass' | 'superlike') => {
     if (!current || acting) return;
@@ -252,35 +248,6 @@ export default function SparkRScreen() {
       setError(err instanceof ApiError ? err.message : 'Bir şeyler ters gitti, tekrar dene.');
     } finally {
       setActing(false);
-    }
-  };
-
-  // Premium-only - see backend/src/routes/discovery.js's /rewind. Puts the
-  // undone person right back at the current position in the deck, so the
-  // very next card shown is the one you just rewound to.
-  const handleRewind = async () => {
-    if (rewinding || acting) return;
-    setRewinding(true);
-    try {
-      const { profile } = await api.rewind();
-      setError(null);
-      if (profile) {
-        setDeck((prev) => {
-          const next = [...prev];
-          next.splice(index, 0, profile);
-          return next;
-        });
-      }
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 402) {
-        navigation.navigate('Premium');
-        return;
-      }
-      // 404 here just means "nothing to undo yet" - worth a small banner,
-      // not worth an intrusive alert.
-      setError(err instanceof ApiError ? err.message : 'Geri alınamadı, tekrar dene.');
-    } finally {
-      setRewinding(false);
     }
   };
 
@@ -365,23 +332,17 @@ export default function SparkRScreen() {
             )}
 
             {/* Super Vibe has its own separate allowance (0/day free, 5/day
-                premium - see backend/src/subscription.js's consumeSuperlike),
-                plus an optional purchased-pack balance on top that's
-                available regardless of subscription tier. Shown whenever
-                there's anything at all to spend (premium's daily count, or
-                a free/premium account holding bonus pack superlikes) -
-                otherwise the star button just goes straight to the paywall
-                (see actionsRow below). */}
-            {superlikeStatus && (superlikeStatus.premium || superlikeStatus.bonus > 0) && (
+                premium - see backend/src/subscription.js's consumeSuperlike).
+                Free accounts never see a counter here - the star button
+                itself goes straight to the paywall instead (see actionsRow
+                below); this pill only shows once premium, so someone who
+                bought it can see how many Super Vibes they have left today. */}
+            {superlikeStatus && superlikeStatus.premium && (
               <View style={styles.limitRow}>
                 <View style={styles.limitPill}>
                   <Ionicons name="star" size={13} color={colors.secondary} />
                   <Text style={styles.limitText}>
-                    {superlikeStatus.premium
-                      ? `${superlikeStatus.remaining}/${superlikeStatus.limit} Super Vibe kaldı`
-                      : ''}
-                    {superlikeStatus.premium && superlikeStatus.bonus > 0 ? ' + ' : ''}
-                    {superlikeStatus.bonus > 0 ? `${superlikeStatus.bonus} paket Super Vibe` : ''}
+                    {superlikeStatus.remaining}/{superlikeStatus.limit} Super Vibe kaldı
                   </Text>
                 </View>
               </View>
@@ -452,18 +413,6 @@ export default function SparkRScreen() {
             )}
 
             <View style={styles.actionsRow}>
-              <Pressable
-                style={[styles.actionButton, styles.rewindButton]}
-                onPress={handleRewind}
-                disabled={rewinding || acting}
-                accessibilityLabel="Son kararını geri al"
-              >
-                {rewinding ? (
-                  <ActivityIndicator color={colors.mutedForeground} />
-                ) : (
-                  <Feather name="rotate-ccw" size={18} color={colors.mutedForeground} />
-                )}
-              </Pressable>
               <Pressable
                 style={[styles.actionButton, styles.passButton]}
                 onPress={() => handleSwipe('pass')}
@@ -940,12 +889,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 32,
     borderWidth: 1,
-  },
-  rewindButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: colors.card,
-    borderColor: colors.border,
   },
   passButton: {
     width: 58,

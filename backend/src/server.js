@@ -85,6 +85,7 @@ const AUTH_LIMIT_PATHS = new Set([
   '/api/auth/forgot-password',
   '/api/auth/reset-password',
   '/api/auth/google',
+  '/api/auth/apple',
 ]);
 
 const authLimiter = createLimiter({ windowMs: 15 * 60 * 1000, max: 20 });

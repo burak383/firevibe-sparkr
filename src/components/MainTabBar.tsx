@@ -6,11 +6,12 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, withAlpha } from '../theme';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
-type Tab = 'Deck' | 'Radar' | 'MyVibe';
+type Tab = 'Deck' | 'Radar' | 'Likes' | 'MyVibe';
 
 const TABS: { key: Tab; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; label: string }[] = [
   { key: 'Deck', icon: 'fire', label: 'Alev Destesi' },
   { key: 'Radar', icon: 'radar', label: 'Vibe Radar' },
+  { key: 'Likes', icon: 'heart', label: 'Beğeniler' },
   { key: 'MyVibe', icon: 'account', label: "Benim Vibe'ım" },
 ];
 

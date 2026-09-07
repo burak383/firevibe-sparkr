@@ -26,21 +26,11 @@ export interface User {
   onboardingComplete: boolean;
   phoneVerified: boolean;
   visible: boolean;
-  // "Okundu bilgisini kapat" setting (default true/on) - when off, your
-  // chat screen never stamps `readAt` on messages you read, so the other
-  // side never sees the colored "Okundu" tick for them. See
-  // backend/src/routes/messages.js's GET handler.
-  readReceiptsEnabled: boolean;
   distanceKm: number;
   favoriteTrack: string;
   createdAt: string;
   swipeStatus: SwipeStatus;
   superlikeStatus: SuperlikeStatus;
-  // One-time "Boost" consumable purchase - puts you at the front of
-  // everyone's discovery deck until `boostedUntil`. See
-  // backend/src/subscription.js's hasActiveBoost/activateBoost.
-  boostActive: boolean;
-  boostedUntil: string | null;
 }
 
 // Free daily like/superlike allowance + premium status. Own-account only -
@@ -63,10 +53,6 @@ export interface SuperlikeStatus {
   limit: number;
   remaining: number;
   resetAt: string | null;
-  // Purchased-pack balance (see backend/src/subscription.js's
-  // addBonusSuperlikes) - spent only after the daily `remaining` above hits
-  // 0, and the only way a free account (limit 0) ever gets a superlike.
-  bonus: number;
 }
 
 // What the backend actually sends for someone ELSE's profile (discovery
@@ -92,35 +78,10 @@ export interface PublicProfile {
   isBot: boolean;
   distanceKm: number;
   favoriteTrack: string;
-  // Bumped (throttled) on the backend every authenticated request - null
-  // means never seen active. See utils/presence.ts for turning this into an
-  // "Aktif şimdi" / "X dk önce aktifti" label or an online dot.
-  lastActiveAt: string | null;
 }
 
 export interface DeckUser extends PublicProfile {
   compatibility: number;
-}
-
-// A profile on the Beğenenler ("who liked you") / Beğeniler ("who you
-// liked") screen - see backend/src/routes/discovery.js's
-// /api/discovery/likes-received and /likes-sent, and screens/Begeniler.tsx.
-export interface LikeEntry extends PublicProfile {
-  compatibility: number;
-  superlike: boolean;
-  likedAt: string;
-  // Only ever set on the "sent" list (likes-received always excludes
-  // matches already, by design - see the backend route's comment) - whether
-  // this like already turned into a mutual match.
-  matched?: boolean;
-}
-
-// A profile on the "Görüntüleyenler" tab of the Beğeniler screen - see
-// backend/src/routes/discovery.js's /api/discovery/profile-views. Same
-// premium lock pattern as LikeEntry's "received" list.
-export interface ProfileViewEntry extends PublicProfile {
-  compatibility: number;
-  viewedAt: string;
 }
 
 export interface Match {
@@ -148,12 +109,6 @@ export interface Message {
   text: string | null;
   imageUrl: string | null;
   createdAt: string;
-  // null until the recipient's chat screen has actually fetched this
-  // message (see backend/src/routes/messages.js's GET handler) - drives the
-  // "İletildi" (gray, not yet read) vs "Okundu" (colored, read) tick on your
-  // own outgoing bubbles in DenizIleSohbet.tsx. Always null on messages you
-  // received yourself - only your OWN sent messages ever show a tick.
-  readAt: string | null;
 }
 
 export interface FireHour {

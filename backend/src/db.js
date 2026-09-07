@@ -13,7 +13,6 @@ const EMPTY_STATE = {
   nextIds: {
     users: 1,
     passwordResets: 1,
-    smsCodes: 1,
     swipes: 1,
     matches: 1,
     messages: 1,
@@ -23,7 +22,6 @@ const EMPTY_STATE = {
   },
   users: [],
   passwordResets: [],
-  smsCodes: [],
   swipes: [],
   matches: [],
   messages: [],
