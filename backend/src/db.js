@@ -67,7 +67,40 @@ function persist() {
   setImmediate(() => {
     saveScheduled = false;
     fs.writeFileSync(DB_PATH, JSON.stringify(state, null, 2));
+    maybeRotateBackup();
   });
+}
+
+// HONEST LIMITATION: this only protects against a bad write corrupting
+// sparkr.json itself (a bug, a crash mid-write) - it copies onto the SAME
+// disk, so it does nothing if the whole disk is lost/deleted. Real
+// off-server backups (to a bucket, another machine, etc.) need separate
+// setup this project doesn't have; see /admin (routes/admin.js) for a
+// manual "download the current database" button in the meantime.
+const BACKUP_DIR = path.join(dir, 'backups');
+const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // every 6h at most, not every write
+const MAX_BACKUPS = 8; // 8 * 6h = 2 days of rolling history
+let lastBackupAt = 0;
+
+function maybeRotateBackup() {
+  const now = Date.now();
+  if (now - lastBackupAt < BACKUP_INTERVAL_MS) return;
+  lastBackupAt = now;
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const stamp = new Date(now).toISOString().replace(/[:.]/g, '-');
+    fs.copyFileSync(DB_PATH, path.join(BACKUP_DIR, `sparkr-${stamp}.json`));
+    const files = fs
+      .readdirSync(BACKUP_DIR)
+      .filter((f) => f.startsWith('sparkr-') && f.endsWith('.json'))
+      .sort();
+    for (const old of files.slice(0, Math.max(0, files.length - MAX_BACKUPS))) {
+      fs.unlinkSync(path.join(BACKUP_DIR, old));
+    }
+  } catch (err) {
+    // A failed backup should never take the app down - just log it.
+    console.error('[db] Backup rotation failed:', err.message);
+  }
 }
 
 function nextId(collection) {
@@ -127,4 +160,4 @@ function removeWhere(collection, predicate) {
   return before - state[collection].length;
 }
 
-module.exports = { insert, all, findById, find, filter, update, remove, removeWhere, persist };
+module.exports = { insert, all, findById, find, filter, update, remove, removeWhere, persist, DB_PATH };

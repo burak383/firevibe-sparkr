@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -19,7 +20,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
-import { ApiError } from '../api/client';
+import { ApiError, API_BASE_URL } from '../api/client';
 import { isGoogleSignInConfigured, promptGoogleSignIn } from '../utils/googleAuth';
 import { isAppleSignInAvailablePlatform, isAppleSignInAvailable, promptAppleSignIn } from '../utils/appleAuth';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -107,6 +108,16 @@ export default function CreateAccountScreen() {
       setAppleSubmitting(false);
     }
   };
+
+  // Legal docs are served as static pages by the backend (see
+  // backend/legal/*.html + the /privacy-policy and /terms routes in
+  // server.js) so App Store Connect / Play Console's Data Safety form have a
+  // real public URL to point at. "Topluluk İlkeleri" has no separate
+  // document - it's the same community rules already shown in-app on the
+  // Security screen, so that one navigates there instead of opening a URL.
+  const openPrivacyPolicy = () => Linking.openURL(`${API_BASE_URL}/privacy-policy`);
+  const openTerms = () => Linking.openURL(`${API_BASE_URL}/terms`);
+  const openCommunityGuidelines = () => navigation.navigate('Security');
 
   const strength = passwordStrength(password);
 
@@ -330,9 +341,18 @@ export default function CreateAccountScreen() {
 
             <Text style={styles.terms}>
               Kayıt olarak{' '}
-              <Text style={styles.termLink}>KVKK Aydınlatma Metni</Text>,{' '}
-              <Text style={styles.termLink}>Gizlilik Politikası</Text> ve{' '}
-              <Text style={styles.termLink}>Topluluk İlkeleri</Text>'ni kabul edersin.
+              <Text style={styles.termLink} onPress={openPrivacyPolicy}>
+                Gizlilik Politikası
+              </Text>
+              'nı (KVKK Aydınlatma Metni dahil),{' '}
+              <Text style={styles.termLink} onPress={openTerms}>
+                Kullanım Şartları
+              </Text>{' '}
+              ve{' '}
+              <Text style={styles.termLink} onPress={openCommunityGuidelines}>
+                Topluluk İlkeleri
+              </Text>
+              'ni kabul edersin.
             </Text>
           </View>
         </ScrollView>

@@ -49,6 +49,31 @@ export default function SelfieVerificationScreen() {
     );
   }
 
+  if (user.verificationStatus === 'pending') {
+    // Submitted, waiting on a human reviewer - see backend's GET/POST
+    // /admin/api/verifications. Not an instant auto-approve anymore, so
+    // there's a real "waiting" state to show instead of always jumping
+    // straight to "Doğrulandı!".
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.centeredContent}>
+          <View style={styles.successBadge}>
+            <Icon name="clock-outline" size={40} color={colors.primary} />
+          </View>
+          <Text style={styles.title}>Selfie'n inceleniyor</Text>
+          <Text style={styles.subtitle}>
+            Fotoğrafını gönderdik, ekibimiz kısa süre içinde gözden geçirip doğrulanmış rozetini açacak.
+          </Text>
+          <Pressable style={styles.primaryButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.primaryButtonText}>Tamam</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const wasRejected = user.verificationStatus === 'rejected';
+
   const handleTakeSelfie = async () => {
     setBusy(true);
     try {
@@ -56,8 +81,8 @@ export default function SelfieVerificationScreen() {
       if (!url) return; // user cancelled the camera
       setPreview(url);
       await verifySelfie(url);
-      Alert.alert('Doğrulandı!', 'Profilinde artık doğrulanmış rozeti görünecek.', [
-        { text: 'Harika', onPress: () => navigation.goBack() },
+      Alert.alert('Gönderildi', 'Selfie\'ni aldık, ekibimiz gözden geçirir geçirmez doğrulanmış rozetin açılacak.', [
+        { text: 'Tamam', onPress: () => navigation.goBack() },
       ]);
     } catch (err) {
       Alert.alert('Hata', err instanceof ApiError ? err.message : 'Selfie gönderilemedi, tekrar dene.');
@@ -102,6 +127,15 @@ export default function SelfieVerificationScreen() {
           Kamerayla canlı bir selfie çek, doğrulanmış rozetini açalım - eski bir fotoğraf seçmek yerine şimdi
           çekmen gerekiyor.
         </Text>
+
+        {wasRejected && (
+          <View style={styles.rejectedRow}>
+            <Icon name="alert-circle-outline" size={16} color={colors.destructive} />
+            <Text style={styles.rejectedText}>
+              Önceki selfie'n onaylanmadı - iyi ışıklı bir yerde, yüzün net görünecek şekilde tekrar dene.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.tipRow}>
           <Icon name="information-outline" size={16} color={colors.mutedForeground} />
@@ -217,6 +251,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     textAlign: 'center',
+  },
+  rejectedRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: colors.muted,
+  },
+  rejectedText: {
+    flex: 1,
+    color: colors.destructive,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    lineHeight: 17,
   },
   tipRow: {
     marginTop: 18,

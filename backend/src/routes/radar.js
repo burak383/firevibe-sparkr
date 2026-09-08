@@ -12,7 +12,7 @@ routes.push({
     const userId = requireAuth(req, res);
     if (userId === null) return;
     const rows = db
-      .filter('users', (u) => u.id !== userId && u.visible !== false && !isBlockedEitherWay(userId, u.id))
+      .filter('users', (u) => u.id !== userId && u.visible !== false && !u.banned && !isBlockedEitherWay(userId, u.id))
       .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
       .slice(0, 12);
     res.json({ nearby: rows.map(toPublicProfile), activeCount: rows.length + 34 });

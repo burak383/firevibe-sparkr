@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SparkR Admin</title>
+<style>
+  :root {
+    --bg: #FBF9F6;
+    --surface: #FFFFFF;
+    --surface-2: #F3EEEA;
+    --text: #201A22;
+    --text-muted: #6B6272;
+    --border: #E7E0E3;
+    --accent: #E0551A;
+    --accent-2: #6E52D9;
+    --danger: #C4361F;
+    --success: #1F8A4C;
+    --rule: #EAE3E6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0B0B10;
+      --surface: #15121A;
+      --surface-2: #1C1720;
+      --text: #FFF7F2;
+      --text-muted: #C8BBC7;
+      --border: #362C39;
+      --accent: #FF7A3D;
+      --accent-2: #9C86EE;
+      --danger: #FF6B54;
+      --success: #4ADE80;
+      --rule: #2A222D;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 20px 80px; }
+  header.top { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+  .mark {
+    width: 36px; height: 36px; border-radius: 10px; background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    color: #1A0B07; font-weight: 700; font-size: 17px; flex: none;
+  }
+  h1 { font-size: 20px; margin: 0; }
+  h2 {
+    font-size: 14px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-muted); margin: 40px 0 14px;
+  }
+  section:first-of-type h2 { margin-top: 0; }
+  .empty {
+    color: var(--text-muted); font-size: 13.5px; padding: 16px;
+    background: var(--surface); border: 1px dashed var(--border); border-radius: 12px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px;
+  }
+  .avatar { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; background: var(--surface-2); flex: none; }
+  .row-main { flex: 1; min-width: 0; }
+  .row-title { font-weight: 700; font-size: 14px; }
+  .row-sub { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+  .row-actions { display: flex; gap: 8px; flex: none; }
+  button {
+    border: none; border-radius: 9px; padding: 8px 12px; font-size: 12.5px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+  }
+  button.approve { background: var(--success); color: #06210F; }
+  button.reject, button.ban { background: var(--danger); color: #2A0B05; }
+  button.dismiss, button.unban { background: var(--surface-2); color: var(--text); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .refresh { background: var(--accent-2); color: #12081F; margin-left: auto; }
+  #status { color: var(--text-muted); font-size: 12.5px; margin-left: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="mark">S</div>
+    <h1>SparkR Admin</h1>
+    <button class="refresh" onclick="loadAll()">Yenile</button>
+    <span id="status"></span>
+  </header>
+
+  <section>
+    <h2>Şikayetler</h2>
+    <div id="reports"></div>
+  </section>
+
+  <section>
+    <h2>Doğrulama Bekleyenler</h2>
+    <div id="verifications"></div>
+  </section>
+
+  <section>
+    <h2>Banlı Kullanıcılar</h2>
+    <div id="banned"></div>
+  </section>
+</div>
+
+<script>
+  function setStatus(text) {
+    document.getElementById('status').textContent = text;
+    if (text) setTimeout(() => { document.getElementById('status').textContent = ''; }, 2500);
+  }
+
+  async function api(path, opts) {
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || ('HTTP ' + res.status));
+    }
+    return res.json();
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  async function loadReports() {
+    const el = document.getElementById('reports');
+    try {
+      const { reports } = await api('/admin/api/reports');
+      if (!reports.length) { el.innerHTML = '<div class="empty">Bekleyen şikayet yok.</div>'; return; }
+      el.innerHTML = reports.map((r) => `
+        <div class="card">
+          <img class="avatar" src="${escapeHtml(r.reported.avatarUrl)}" onerror="this.style.visibility='hidden'">
+          <div class="row-main">
+            <div class="row-title">${escapeHtml(r.reported.name)} <span style="color:var(--text-muted);font-weight:400">şikayet edildi (#${r.reported.id})</span></div>
+            <div class="row-sub">Şikayet eden: ${escapeHtml(r.reporter.name)} (#${r.reporter.id}) · "${escapeHtml(r.reason)}" · ${new Date(r.createdAt).toLocaleString('tr-TR')}</div>
+          </div>
+          <div class="row-actions">
+            <button class="ban" onclick="banFromReport(${r.id}, this)">Kullanıcıyı Banla</button>
+            <button class="dismiss" onclick="dismissReport(${r.id}, this)">Kapat</button>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      el.innerHTML = '<div class="empty">Yüklenemedi: ' + escapeHtml(err.message) + '</div>';
+    }
+  }
+
+  async function dismissReport(id, btn) {
+    btn.closest('.card').style.opacity = '0.5';
+    try { await api(`/admin/api/reports/${id}/dismiss`, { method: 'POST' }); setStatus('Şikayet kapatıldı'); loadReports(); }
+    catch (err) { setStatus('Hata: ' + err.message); btn.closest('.card').style.opacity = '1'; }
+  }
+
+  async function banFromReport(id, btn) {
+    if (!confirm('Bu kullanıcıyı banlamak istediğine emin misin? Hesabı giriş yapamaz hale gelir.')) return;
+    btn.closest('.card').style.opacity = '0.5';
+    try { await api(`/admin/api/reports/${id}/ban`, { method: 'POST' }); setStatus('Kullanıcı banlandı'); loadAll(); }
+    catch (err) { setStatus('Hata: ' + err.message); btn.closest('.card').style.opacity = '1'; }
+  }
+
+  async function loadVerifications() {
+    const el = document.getElementById('verifications');
+    try {
+      const { pending } = await api('/admin/api/verifications');
+      if (!pending.length) { el.innerHTML = '<div class="empty">Bekleyen doğrulama yok.</div>'; return; }
+      el.innerHTML = pending.map((u) => `
+        <div class="card">
+          <img class="avatar" src="${escapeHtml(u.pendingSelfieUrl || u.avatarUrl)}" onerror="this.style.visibility='hidden'">
+          <div class="row-main">
+            <div class="row-title">${escapeHtml(u.name)}${u.age ? ', ' + u.age : ''} (#${u.id})</div>
+            <div class="row-sub">Gönderim: ${u.submittedAt ? new Date(u.submittedAt).toLocaleString('tr-TR') : '-'} · <a href="${escapeHtml(u.pendingSelfieUrl)}" target="_blank" style="color:var(--accent-2)">selfie'yi büyük gör</a></div>
+          </div>
+          <div class="row-actions">
+            <button class="approve" onclick="reviewVerification(${u.id}, 'approve', this)">Onayla</button>
+            <button class="reject" onclick="reviewVerification(${u.id}, 'reject', this)">Reddet</button>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      el.innerHTML = '<div class="empty">Yüklenemedi: ' + escapeHtml(err.message) + '</div>';
+    }
+  }
+
+  async function reviewVerification(id, action, btn) {
+    btn.closest('.card').style.opacity = '0.5';
+    try {
+      await api(`/admin/api/verifications/${id}/${action}`, { method: 'POST' });
+      setStatus(action === 'approve' ? 'Onaylandı' : 'Reddedildi');
+      loadVerifications();
+    } catch (err) {
+      setStatus('Hata: ' + err.message);
+      btn.closest('.card').style.opacity = '1';
+    }
+  }
+
+  async function loadBanned() {
+    const el = document.getElementById('banned');
+    try {
+      const { banned } = await api('/admin/api/users/banned');
+      if (!banned.length) { el.innerHTML = '<div class="empty">Banlı kullanıcı yok.</div>'; return; }
+      el.innerHTML = banned.map((u) => `
+        <div class="card">
+          <div class="row-main">
+            <div class="row-title">${escapeHtml(u.name)} (#${u.id})</div>
+            <div class="row-sub">${escapeHtml(u.contact)} · Ban tarihi: ${u.bannedAt ? new Date(u.bannedAt).toLocaleString('tr-TR') : '-'}</div>
+          </div>
+          <div class="row-actions">
+            <button class="unban" onclick="unban(${u.id}, this)">Banı Kaldır</button>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      el.innerHTML = '<div class="empty">Yüklenemedi: ' + escapeHtml(err.message) + '</div>';
+    }
+  }
+
+  async function unban(id, btn) {
+    btn.closest('.card').style.opacity = '0.5';
+    try { await api(`/admin/api/users/${id}/unban`, { method: 'POST' }); setStatus('Ban kaldırıldı'); loadBanned(); }
+    catch (err) { setStatus('Hata: ' + err.message); btn.closest('.card').style.opacity = '1'; }
+  }
+
+  function loadAll() {
+    loadReports();
+    loadVerifications();
+    loadBanned();
+  }
+
+  loadAll();
+</script>
+</body>
+</html>

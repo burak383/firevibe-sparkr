@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../api/client';
 import { getPremiumOffering, purchaseConsumable, purchasePremium, restorePurchases } from '../utils/subscription';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -139,6 +140,13 @@ export default function PremiumScreen() {
 
   const selectedPackage = packages[selectedIndex] ?? null;
   const annualSavingsPct = computeAnnualSavingsPct(packages);
+
+  // App Store Review Guideline 3.1.2 requires auto-renewing subscriptions to
+  // show title/length/price and link Terms of Use + Privacy Policy right
+  // next to the purchase button - see backend/legal/*.html for the actual
+  // documents (served by the backend so they have a real public URL).
+  const openTerms = () => Linking.openURL(`${API_BASE_URL}/terms`);
+  const openPrivacyPolicy = () => Linking.openURL(`${API_BASE_URL}/privacy-policy`);
 
   const handlePurchase = async () => {
     if (!selectedPackage || purchasing) return;
@@ -283,6 +291,24 @@ export default function PremiumScreen() {
                 </Text>
               )}
             </Pressable>
+
+            {selectedPackage && (
+              <Text style={styles.disclosureText}>
+                {planLabel(selectedPackage)} plan · {selectedPackage.product.priceString} — mevcut dönem
+                bitmeden en az 24 saat önce iptal etmediğin sürece otomatik olarak yenilenir, ücret App
+                Store/Google Play hesabından tahsil edilir. İptal, cihazının mağaza hesap ayarlarından
+                yapılır.
+              </Text>
+            )}
+            <View style={styles.disclosureLinksRow}>
+              <Text style={styles.disclosureLink} onPress={openTerms}>
+                Kullanım Şartları
+              </Text>
+              <Text style={styles.disclosureDot}>·</Text>
+              <Text style={styles.disclosureLink} onPress={openPrivacyPolicy}>
+                Gizlilik Politikası
+              </Text>
+            </View>
           </>
         ) : (
           <Text style={styles.helperText}>
@@ -505,6 +531,32 @@ const styles = StyleSheet.create({
     fontFamily: fonts.heading,
     fontSize: 16,
     fontWeight: '800',
+  },
+  disclosureText: {
+    marginTop: 14,
+    color: colors.mutedForeground,
+    fontFamily: fonts.body,
+    fontSize: 11.5,
+    lineHeight: 16.5,
+    textAlign: 'center',
+  },
+  disclosureLinksRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  disclosureLink: {
+    color: colors.mutedForeground,
+    fontFamily: fonts.body,
+    fontSize: 11.5,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  disclosureDot: {
+    color: colors.mutedForeground,
+    fontSize: 11.5,
   },
   helperText: {
     marginTop: 24,

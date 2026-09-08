@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SparkR Gizlilik Politikası</title>
+<style>
+  :root {
+    --bg: #FBF9F6;
+    --surface: #FFFFFF;
+    --surface-2: #F3EEEA;
+    --text: #201A22;
+    --text-muted: #6B6272;
+    --border: #E7E0E3;
+    --accent: #E0551A;
+    --accent-2: #6E52D9;
+    --accent-2-soft: #EFEAFB;
+    --accent-soft: #FDEBE0;
+    --rule: #EAE3E6;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0B0B10;
+      --surface: #15121A;
+      --surface-2: #1C1720;
+      --text: #FFF7F2;
+      --text-muted: #C8BBC7;
+      --border: #362C39;
+      --accent: #FF7A3D;
+      --accent-2: #9C86EE;
+      --accent-2-soft: #241E3A;
+      --accent-soft: #2E1B12;
+      --rule: #2A222D;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0B0B10;
+    --surface: #15121A;
+    --surface-2: #1C1720;
+    --text: #FFF7F2;
+    --text-muted: #C8BBC7;
+    --border: #362C39;
+    --accent: #FF7A3D;
+    --accent-2: #9C86EE;
+    --accent-2-soft: #241E3A;
+    --accent-soft: #2E1B12;
+    --rule: #2A222D;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2 {
+    font-family: 'Space Grotesk', 'Manrope', sans-serif;
+    text-wrap: balance;
+  }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  header.top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+
+  .mark {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--accent);
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1A0B07;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 19px;
+  }
+
+  .brand {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: 0.2px;
+  }
+
+  h1.title {
+    font-size: clamp(28px, 4.5vw, 38px);
+    font-weight: 700;
+    margin: 22px 0 6px;
+  }
+
+  .meta {
+    color: var(--text-muted);
+    font-size: 13.5px;
+    margin: 0 0 36px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .meta span { white-space: nowrap; }
+
+  .summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 22px 24px;
+    margin-bottom: 44px;
+  }
+
+  .summary .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 0 0 12px;
+  }
+
+  .summary ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 12px;
+  }
+
+  .summary li {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 14.5px;
+    color: var(--text);
+  }
+
+  .summary li::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    flex: none;
+    margin-top: 7px;
+  }
+
+  section.clause {
+    padding: 30px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  section.clause:first-of-type { border-top: none; padding-top: 0; }
+
+  h2.clause-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 19px;
+    font-weight: 700;
+    margin: 0 0 12px;
+  }
+
+  h2.clause-title .num {
+    font-variant-numeric: tabular-nums;
+    color: var(--accent-2);
+    font-size: 14px;
+    font-weight: 700;
+    background: var(--accent-2-soft);
+    border-radius: 8px;
+    padding: 3px 8px;
+  }
+
+  .clause p {
+    margin: 0 0 12px;
+    max-width: 66ch;
+    color: var(--text);
+  }
+
+  .clause p:last-child { margin-bottom: 0; }
+
+  .clause p.muted { color: var(--text-muted); font-size: 14.5px; }
+
+  table.processors {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 14px;
+    font-size: 14px;
+  }
+
+  .processors-scroll { overflow-x: auto; }
+
+  table.processors th, table.processors td {
+    text-align: left;
+    padding: 10px 14px 10px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+
+  table.processors th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  table.processors td:first-child, table.processors th:first-child { font-weight: 700; white-space: nowrap; }
+
+  .rights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .rights-grid div {
+    background: var(--surface-2);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 13.5px;
+  }
+
+  footer.contact {
+    margin-top: 48px;
+    padding-top: 30px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  footer.contact .who { font-size: 14px; }
+  footer.contact .who strong { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 16px; margin-bottom: 4px; }
+  footer.contact a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  footer.contact a:hover { text-decoration: underline; }
+
+  ::selection { background: var(--accent-soft); }
+
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Manrope:wght@400;500;600;700&display=swap">
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="mark">S</div>
+    <div class="brand">SparkR</div>
+  </header>
+
+  <h1 class="title">Gizlilik Politikası</h1>
+  <p class="meta">
+    <span>Son güncelleme: 21 Ağustos 2026</span>
+    <span>Veri sorumlusu: Burak Tüfekçi (şahıs işletmesi)</span>
+  </p>
+
+  <div class="summary">
+    <p class="eyebrow">Kısaca</p>
+    <ul>
+      <li>Hesap, profil ve mesajlaşma verilerini yalnızca uygulamayı çalıştırmak için topluyoruz — satışa çıkarmıyoruz.</li>
+      <li>Fotoğraf ve sesli notlarını, uygunsuz içerik taraması için görsel/ses güvenlik servislerine gönderiyoruz; içerik bu tarama dışında başka bir amaçla kullanılmıyor.</li>
+      <li>Abonelik satın alımların RevenueCat ve ilgili mağaza (App Store/Play Store) üzerinden işleniyor — kart bilgin bize hiç ulaşmıyor.</li>
+      <li>Hesabını istediğin zaman uygulama içinden kalıcı olarak silebilirsin.</li>
+    </ul>
+  </div>
+
+  <section class="clause">
+    <h2 class="clause-title"><span class="num">01</span> Veri Sorumlusu</h2>
+    <p>6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca, SparkR uygulaması kapsamında işlenen kişisel verileriniz bakımından veri sorumlusu Burak Tüfekçi (şahıs işletmesi)'dır. Sorularınız için <a href="mailto:seolen8@gmail.com">seolen8@gmail.com</a> adresinden bize ulaşabilirsiniz.</p>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title"><span class="num">02</span> İşlenen Kişisel Veriler</h2>
+    <p>Kimlik ve iletişim bilgileri (ad, telefon numarası/e-posta), profil bilgileri (yaş, biyografi, şehir/semt, ilgi alanları), profil fotoğrafları ve galeri görselleri, sesli notlar, doğrulama amacıyla çekilen selfie fotoğrafları, yaklaşık konum bilgisi, uygulama içi mesajlaşma içerikleri, abonelik durumu ve kullanım/etkileşim verileri (beğeni, geçme, eşleşme, şikayet kayıtları) işlenmektedir.</p>
+    <p class="muted">Ödeme kartı bilgileriniz tarafımızca hiçbir şekilde görülmez veya saklanmaz — bu bilgiler doğrudan Apple/Google'ın mağaza altyapısında işlenir.</p>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title"><span class="num">03</span> İşleme Amaçları</h2>
+    <p>Verileriniz; hesabınızı oluşturmak ve doğrulamak, size uygun eşleşmeleri göstermek, uygulama içi mesajlaşmayı sağlamak, güvenliği korumak (engelleme/şikayet süreçleri, sahte hesap ve uygunsuz içerik tespiti), abonelik hizmetini yürütmek, size bildirim göndermek, yasal yükümlülüklerin yerine getirilmesi ve uygulamanın geliştirilmesi amacıyla işlenmektedir.</p>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title"><span class="num">04</span> Hukuki Sebep</h2>
+    <p>Kişisel verileriniz, KVKK m.5 kapsamında açık rızanızın alınması ve/veya bir sözleşmenin kurulması/ifasıyla doğrudan doğruya ilgili olması, hukuki yükümlülüğün yerine getirilmesi ve veri sorumlusunun meşru menfaati hukuki sebeplerine dayanılarak işlenmektedir.</p>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title"><span class="num">05</span> Üçüncü Taraflarla Paylaşım</h2>
+    <p>Profiliniz diğer kullanıcılara yalnızca "görünür" ayarındayken ve yalnızca profil bilgileriniz (iletişim bilgileriniz hariç) ölçüsünde gösterilir. Bunun dışında verileriniz, yalnızca uygulamanın çalışması için gerekli aşağıdaki hizmet sağlayıcılarla, yalnızca belirtilen amaçla sınırlı olacak şekilde paylaşılır:</p>
+    <div class="processors-scroll">
+      <table class="processors">
+        <thead>
+          <tr><th>Servis</th><th>Amaç</th><th>Paylaşılan veri</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Render</td><td>Sunucu barındırma</td><td>Tüm uygulama verisi (altyapı sağlayıcısı olarak)</td></tr>
+          <tr><td>Google Cloud Vision</td><td>Gönderilen fotoğraflarda uygunsuz/cinsel içerik taraması</td><td>Yüklenen fotoğraf</td></tr>
+          <tr><td>OpenAI (Whisper)</td><td>Sesli notların uygunsuz içerik taraması için yazıya çevrilmesi</td><td>Yüklenen ses kaydı</td></tr>
+          <tr><td>RevenueCat</td><td>Abonelik/satın alma yönetimi</td><td>Kullanıcı kimliği, abonelik durumu</td></tr>
+          <tr><td>Apple App Store / Google Play</td><td>Ödeme işleme</td><td>Satın alma işlemi (kart bilgisi bize ulaşmaz)</td></tr>
+          <tr><td>Expo</td><td>Push bildirimi gönderimi</td><td>Cihaz push token'ı</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted">Yasal olarak yetkili kamu kurum ve kuruluşları dışında verileriniz başka hiçbir üçüncü tarafla paylaşılmaz veya satılmaz.</p>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title"><span class="num">06</span> Saklama Süresi</h2>
+    <p>Verileriniz, hesabınız aktif olduğu sürece saklanır ve hesabınızı sildiğinizde (uygulama içi "Hesabımı Sil" işlemiyle) derhal ve kalıcı olarak silinir; yasal saklama yükümlülüğü bulunan veriler ilgili mevzuatta öngörülen süre kadar ayrıca saklanabilir.</p>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title"><span class="num">07</span> Haklarınız</h2>
+    <p>KVKK'nın 11. maddesi uyarınca aşağıdaki haklara sahipsiniz. Bu hakları kullanmak için <a href="mailto:seolen8@gmail.com">seolen8@gmail.com</a> üzerinden bize ulaşabilirsiniz.</p>
+    <div class="rights-grid">
+      <div>Verinizin işlenip işlenmediğini öğrenme</div>
+      <div>İşlenmişse buna ilişkin bilgi talep etme</div>
+      <div>İşlenme amacını öğrenme</div>
+      <div>Aktarıldığı üçüncü kişileri bilme</div>
+      <div>Eksik/yanlış verinin düzeltilmesini isteme</div>
+      <div>Verinin silinmesini/yok edilmesini isteme</div>
+      <div>Aleyhe bir sonuca itiraz etme</div>
+      <div>Zararın giderilmesini talep etme</div>
+    </div>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title"><span class="num">08</span> Yaş Sınırı</h2>
+    <p>SparkR yalnızca 18 yaş ve üzeri kullanıcılar içindir. 18 yaşından küçük olduğunu tespit ettiğimiz hesaplar bildirim yapılmaksızın kaldırılır. Bilerek 18 yaş altından veri toplamıyoruz.</p>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title"><span class="num">09</span> Politika Değişiklikleri</h2>
+    <p>Bu politika zaman zaman güncellenebilir. Güncel sürüm her zaman bu sayfada yayında olacak ve en üstteki "son güncelleme" tarihi değişecektir.</p>
+  </section>
+
+  <footer class="contact">
+    <div class="who">
+      <strong>Burak Tüfekçi</strong>
+      Veri sorumlusu — şahıs işletmesi
+    </div>
+    <div class="who">
+      <strong>İletişim</strong>
+      <a href="mailto:seolen8@gmail.com">seolen8@gmail.com</a>
+    </div>
+  </footer>
+</div>
+</body>
+</html>

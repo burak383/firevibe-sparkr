@@ -23,7 +23,12 @@ routes.push({
     const deck = db
       .filter(
         'users',
-        (u) => u.id !== userId && u.visible !== false && !alreadySwiped.has(u.id) && !isBlockedEitherWay(userId, u.id)
+        (u) =>
+          u.id !== userId &&
+          u.visible !== false &&
+          !u.banned &&
+          !alreadySwiped.has(u.id) &&
+          !isBlockedEitherWay(userId, u.id)
       )
       // Boosted users (one-time consumable purchase - see
       // ../subscription.js's hasActiveBoost) get sorted to the very front of

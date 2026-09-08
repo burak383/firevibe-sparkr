@@ -207,16 +207,14 @@ routes.push({
   },
 });
 
-// Flips on the "verified" badge after the user submits a live selfie (see
-// SelfieDogrulama.tsx - it forces the front camera rather than the photo
-// library, so at least a real photo was taken just now).
-//
-// HONEST LIMITATION: this demo has no human moderation queue and no real
-// face-match/liveness model behind it, so submitting ANY selfie photo
-// approves instantly - it can't actually confirm the selfie matches the
-// person in the profile photos. A real product would hold this as
-// "pending" until a moderator or a dedicated face-match/liveness API
-// approves it, rather than trusting the client like this.
+// Submits a live selfie for the "verified" badge (see SelfieDogrulama.tsx -
+// it forces the front camera rather than the photo library, so at least a
+// real photo was taken just now). This no longer flips `verified` on
+// instantly: there's still no real face-match/liveness model behind it, so
+// instead it queues the photo for a human to review - see
+// routes/admin.js's GET/POST /admin/api/verifications, which is where
+// `verified` actually gets set to true (approve) or the submission gets
+// cleared for a retry (reject).
 routes.push({
   method: 'POST',
   path: '/api/users/me/verify-selfie',
@@ -225,7 +223,11 @@ routes.push({
     if (userId === null) return;
     const selfieUrl = typeof body.selfieUrl === 'string' ? body.selfieUrl.trim() : '';
     if (!selfieUrl) return res.status(400).json({ error: 'Bir selfie fotoğrafı gerekli.' });
-    const row = db.update('users', userId, { verified: true, verifiedAt: new Date().toISOString() });
+    const row = db.update('users', userId, {
+      verificationStatus: 'pending',
+      pendingSelfieUrl: selfieUrl,
+      pendingSelfieSubmittedAt: new Date().toISOString(),
+    });
     if (!row) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     res.json({ user: toPublicUser(row) });
   },

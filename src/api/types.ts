@@ -22,6 +22,11 @@ export interface User {
   discoveryRadiusKm: number;
   voiceNoteUrl: string;
   verified: boolean;
+  // Set by POST /api/users/me/verify-selfie ('pending') and cleared by an
+  // admin's approve/reject in the /admin dashboard (backend/src/routes/admin.js) -
+  // see SelfieDogrulama.tsx, which shows a different screen for each state
+  // instead of always assuming a fresh selfie gets approved instantly.
+  verificationStatus: 'none' | 'pending' | 'rejected';
   isBot: boolean;
   onboardingComplete: boolean;
   phoneVerified: boolean;

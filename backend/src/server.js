@@ -4,10 +4,12 @@ const path = require('path');
 const http = require('http');
 const { URL } = require('url');
 const { readBody, enhanceResponse, compilePattern } = require('./http-helpers');
+const db = require('./db');
 const { ensureSeeded } = require('./seed');
 const { UPLOAD_DIR } = require('./uploads-dir');
 const { createLimiter, clientIp } = require('./rate-limit');
 const { startReengagementJobs } = require('./reengagement');
+const { requireAdmin } = require('./admin-auth');
 
 ensureSeeded();
 // Periodic "come back" push notifications (stale matches, Fire Hour
@@ -23,6 +25,7 @@ const radarRoutes = require('./routes/radar');
 const uploadRoutes = require('./routes/uploads');
 const { routes: safetyRoutes } = require('./routes/safety');
 const subscriptionRoutes = require('./routes/subscription');
+const { routes: adminRoutes } = require('./routes/admin');
 
 const routeTable = [
   ...authRoutes,
@@ -34,6 +37,7 @@ const routeTable = [
   ...uploadRoutes,
   ...safetyRoutes,
   ...subscriptionRoutes,
+  ...adminRoutes,
 ].map((route) => ({ ...route, match: compilePattern(route.path) }));
 
 const UPLOAD_MIME_BY_EXT = {
@@ -48,6 +52,58 @@ const UPLOAD_MIME_BY_EXT = {
   '.wav': 'audio/wav',
   '.webm': 'audio/webm',
 };
+
+// Serves the static legal documents (privacy policy, terms of service) that
+// Play Console's Data Safety form and App Store Connect's app privacy /
+// EULA fields need a real public URL for - see backend/legal/*.html. Kept
+// as plain static files (not an API route) so they're reachable without a
+// token and don't count against the API rate limiters below.
+const LEGAL_DIR = path.join(__dirname, '..', 'legal');
+const LEGAL_DOCS = {
+  '/privacy-policy': 'privacy-policy.html',
+  '/terms': 'terms-of-service.html',
+};
+function serveLegalDoc(res, filename) {
+  fs.readFile(path.join(LEGAL_DIR, filename), 'utf8', (err, html) => {
+    if (err) {
+      res.status(404).json({ error: 'Bulunamadı' });
+      return;
+    }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.statusCode = 200;
+    res.end(html);
+  });
+}
+
+// Serves the admin dashboard shell (backend/admin/index.html - a plain
+// static page, no build step, that calls the /admin/api/* routes above from
+// the browser) and a one-click download of the live database file. Both are
+// gated by the same Basic Auth as the API routes - see admin-auth.js.
+function serveAdminDashboard(res) {
+  fs.readFile(path.join(__dirname, '..', 'admin', 'index.html'), 'utf8', (err, html) => {
+    if (err) {
+      res.status(500).json({ error: 'Admin paneli yüklenemedi' });
+      return;
+    }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.statusCode = 200;
+    res.end(html);
+  });
+}
+
+function serveDbBackup(res) {
+  fs.readFile(db.DB_PATH, (err, data) => {
+    if (err) {
+      res.status(404).json({ error: 'Veritabanı dosyası bulunamadı' });
+      return;
+    }
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="sparkr-backup-${Date.now()}.json"`);
+    res.statusCode = 200;
+    res.end(data);
+  });
+}
 
 // Serves files written by POST /api/uploads (see routes/uploads.js). Only
 // filenames matching our own generated pattern are allowed, so this can't
@@ -139,6 +195,20 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && pathname.startsWith('/uploads/')) {
     return serveUpload(res, pathname);
+  }
+
+  if (req.method === 'GET' && LEGAL_DOCS[pathname]) {
+    return serveLegalDoc(res, LEGAL_DOCS[pathname]);
+  }
+
+  if (req.method === 'GET' && pathname === '/admin') {
+    if (!requireAdmin(req, res)) return;
+    return serveAdminDashboard(res);
+  }
+
+  if (req.method === 'GET' && pathname === '/admin/backup') {
+    if (!requireAdmin(req, res)) return;
+    return serveDbBackup(res);
   }
 
   const limit = checkRateLimit(req, pathname);

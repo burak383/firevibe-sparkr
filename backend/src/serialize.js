@@ -25,6 +25,11 @@ function toPublicUser(row) {
     discoveryRadiusKm: row.discoveryRadiusKm ?? 12,
     voiceNoteUrl: row.voiceNoteUrl || '',
     verified: !!row.verified,
+    // Own-account only - lets SelfieDogrulama.tsx show "inceleniyor" /
+    // "reddedildi, tekrar dene" instead of always assuming a fresh selfie
+    // is instantly approved. Set by POST /verify-selfie ('pending') and
+    // cleared by an admin's approve/reject (routes/admin.js).
+    verificationStatus: row.verificationStatus || 'none',
     isBot: !!row.isBot,
     onboardingComplete: !!row.onboardingComplete,
     phoneVerified: !!row.phoneVerified,

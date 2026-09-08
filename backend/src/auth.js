@@ -95,6 +95,14 @@ function requireAuth(req, res) {
     res.status(401).json({ error: 'Oturumun sona ermiş. Lütfen tekrar giriş yap.' });
     return null;
   }
+  // Banned accounts (see routes/admin.js) keep a valid signed token - the
+  // token itself has no "revoked" concept - so the ban has to be checked
+  // against the current user row on every request, not baked into the JWT.
+  const row = db.findById('users', payload.userId);
+  if (row && row.banned) {
+    res.status(403).json({ error: 'Hesabın askıya alındı.' });
+    return null;
+  }
   touchLastActive(payload.userId);
   return payload.userId;
 }
