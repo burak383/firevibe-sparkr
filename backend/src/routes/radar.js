@@ -2,6 +2,7 @@ const db = require('../db');
 const { requireAuth } = require('../auth');
 const { toPublicProfile } = require('../serialize');
 const { isBlockedEitherWay } = require('./safety');
+const { resolveDistanceKm } = require('../geo');
 
 const routes = [];
 
@@ -11,11 +12,14 @@ routes.push({
   handler: async (req, res) => {
     const userId = requireAuth(req, res);
     if (userId === null) return;
+    const me = db.findById('users', userId);
     const rows = db
       .filter('users', (u) => u.id !== userId && u.visible !== false && !u.banned && !isBlockedEitherWay(userId, u.id))
-      .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
+      // Real distance when both sides have a saved GPS position (see
+      // ../geo.js), same fallback as routes/discovery.js's deck otherwise.
+      .sort((a, b) => resolveDistanceKm(me, a) - resolveDistanceKm(me, b))
       .slice(0, 12);
-    res.json({ nearby: rows.map(toPublicProfile), activeCount: rows.length + 34 });
+    res.json({ nearby: rows.map((row) => toPublicProfile(row, me)), activeCount: rows.length + 34 });
   },
 });
 

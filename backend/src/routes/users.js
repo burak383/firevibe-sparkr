@@ -54,6 +54,22 @@ function buildPatch(body) {
     patch.ageRangeMax = mid;
   }
   if (Number.isFinite(body.discoveryRadiusKm)) patch.discoveryRadiusKm = Math.round(body.discoveryRadiusKm);
+  // Real GPS coordinates, captured only from the device's own location (see
+  // mobile/src/utils/location.ts's detectCityFromLocation) - never typed in
+  // by hand, so unlike city/neighbourhood there's no lock needed to stop
+  // someone faking a different one; refreshing it (moving around, opening
+  // the app again) just keeps the distance shown to others accurate. NEVER
+  // returned to any client - see serialize.js/geo.js, which only ever expose
+  // the computed distanceKm number derived from these.
+  if (
+    Number.isFinite(body.latitude) &&
+    Number.isFinite(body.longitude) &&
+    Math.abs(body.latitude) <= 90 &&
+    Math.abs(body.longitude) <= 180
+  ) {
+    patch.latitude = body.latitude;
+    patch.longitude = body.longitude;
+  }
   if (Array.isArray(body.gallery)) patch.gallery = body.gallery.filter((x) => typeof x === 'string');
   if (Array.isArray(body.musicTags)) patch.musicTags = body.musicTags.filter((x) => typeof x === 'string');
   if (Array.isArray(body.vibeTags)) patch.vibeTags = body.vibeTags.filter((x) => typeof x === 'string');
@@ -272,7 +288,8 @@ routes.push({
     const row = db.findById('users', targetId);
     if (!row) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     recordProfileView(userId, targetId);
-    res.json({ user: toPublicProfile(row) });
+    const viewer = db.findById('users', userId);
+    res.json({ user: toPublicProfile(row, viewer) });
   },
 });
 

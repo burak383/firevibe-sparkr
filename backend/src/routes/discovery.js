@@ -20,6 +20,25 @@ routes.push({
       db.filter('swipes', (s) => s.userId === userId).map((s) => s.targetUserId)
     );
 
+    // "Keşif Tercihleri" (BenimVibeM.tsx / Profil.tsx) - yaş aralığı and
+    // keşif çapı were being saved and shown to the user but never actually
+    // applied here, so changing them had literally zero effect on the deck.
+    // A candidate with no known age (Google/Apple sign-ups never collect a
+    // birth date - see routes/auth.js) is kept rather than excluded, since
+    // "unknown" shouldn't be treated as "outside the range".
+    //
+    // HONEST LIMITATION: `distanceKm` isn't a real GPS-computed distance for
+    // real users - see routes/auth.js, where every real signup gets a fixed
+    // `distanceKm: 0` that's never recalculated (the app only ever stores a
+    // reverse-geocoded city/neighbourhood string, never coordinates - see
+    // mobile/src/utils/location.ts). So this filter is fully real between
+    // real users only once real distance tracking exists; today it mainly
+    // does something for the 5 seeded demo bots, which do have fixed
+    // per-bot distances (see seed.js).
+    const ageMin = me.ageRangeMin ?? 18;
+    const ageMax = me.ageRangeMax ?? 50;
+    const radiusKm = me.discoveryRadiusKm ?? 12;
+
     const deck = db
       .filter(
         'users',
@@ -28,7 +47,9 @@ routes.push({
           u.visible !== false &&
           !u.banned &&
           !alreadySwiped.has(u.id) &&
-          !isBlockedEitherWay(userId, u.id)
+          !isBlockedEitherWay(userId, u.id) &&
+          (u.age == null || (u.age >= ageMin && u.age <= ageMax)) &&
+          (u.distanceKm ?? 0) <= radiusKm
       )
       // Boosted users (one-time consumable purchase - see
       // ../subscription.js's hasActiveBoost) get sorted to the very front of

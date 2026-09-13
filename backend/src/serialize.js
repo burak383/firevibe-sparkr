@@ -1,4 +1,5 @@
 const { getSwipeStatus, getSuperlikeStatus, hasActiveBoost } = require('./subscription');
+const { resolveDistanceKm } = require('./geo');
 
 function toPublicUser(row) {
   if (!row) return null;
@@ -67,7 +68,12 @@ function toPublicUser(row) {
 // list, and the single-profile lookup below. `toPublicUser` stays reserved
 // for "this is the caller's own account" responses (register/login,
 // /api/auth/me, /api/users/me).
-function toPublicProfile(row) {
+// `viewer` is the CALLER's own user row (not a public profile - needs the
+// caller's raw latitude/longitude, which never leaves the server - see
+// geo.js). Optional: omitted, `distanceKm` falls back to the old static
+// per-row value instead of a real computed one (still correct for the 5 seed
+// bots, which have no real coordinates and never will).
+function toPublicProfile(row, viewer) {
   if (!row) return null;
   return {
     id: row.id,
@@ -84,7 +90,7 @@ function toPublicProfile(row) {
     voiceNoteUrl: row.voiceNoteUrl || '',
     verified: !!row.verified,
     isBot: !!row.isBot,
-    distanceKm: row.distanceKm ?? 2.4,
+    distanceKm: viewer ? resolveDistanceKm(viewer, row) : row.distanceKm ?? 2.4,
     favoriteTrack: row.favoriteTrack || '',
     // Bumped (throttled) on every authenticated request by auth.js's
     // requireAuth - the mobile app derives "Aktif şimdi" / "X dk önce

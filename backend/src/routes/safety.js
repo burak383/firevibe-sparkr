@@ -21,11 +21,12 @@ routes.push({
   handler: async (req, res) => {
     const userId = requireAuth(req, res);
     if (userId === null) return;
+    const me = db.findById('users', userId);
     const blocks = db.filter('blocks', (b) => b.blockerId === userId).sort((a, b) => b.id - a.id);
     const blockedUsers = blocks
       .map((b) => {
         const user = db.findById('users', b.blockedId);
-        return user ? { blockId: b.id, user: toPublicProfile(user) } : null;
+        return user ? { blockId: b.id, user: toPublicProfile(user, me) } : null;
       })
       .filter(Boolean);
     res.json({ blocked: blockedUsers });

@@ -128,6 +128,13 @@ routes.push({
     if (!row || !verifyPassword(password, row.passwordHash)) {
       return res.status(401).json({ error: 'Telefon/e-posta veya şifre hatalı.' });
     }
+    // Same "banned accounts can't get in" rule requireAuth enforces on every
+    // later request (see auth.js) - checked here too so a banned user sees a
+    // clear message right at login instead of getting a token that then
+    // fails with a confusing 403 on their very next API call.
+    if (row.banned) {
+      return res.status(403).json({ error: 'Hesabın askıya alındı.' });
+    }
     const token = signToken(row.id);
     res.json({ token, user: toPublicUser(row) });
   },
@@ -201,6 +208,12 @@ routes.push({
     const contact = String(payload.email).trim().toLowerCase();
     let row = db.find('users', (u) => u.contact === contact);
 
+    // Same as /api/auth/login above - reject a banned account right here
+    // instead of handing out a token that fails on the next request.
+    if (row && row.banned) {
+      return res.status(403).json({ error: 'Hesabın askıya alındı.' });
+    }
+
     if (!row) {
       // Google doesn't share a birth date over the basic OpenID scopes, so
       // `age`/`birthDate` stay empty for Google-created accounts - the
@@ -271,6 +284,14 @@ routes.push({
       // `email` once verified on Apple's side, so this is as trustworthy as
       // the Google linking case above.
       row = db.find('users', (u) => u.contact === String(payload.email).trim().toLowerCase());
+    }
+
+    // Same as /api/auth/login above - reject a banned account right here
+    // instead of handing out a token that fails on the next request. Checked
+    // after BOTH lookups above, since the account might only be found via
+    // the email fallback, not the primary appleUserId lookup.
+    if (row && row.banned) {
+      return res.status(403).json({ error: 'Hesabın askıya alındı.' });
     }
 
     if (row) {

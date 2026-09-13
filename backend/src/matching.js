@@ -61,6 +61,7 @@ function findOrCreateMatch(userA, userB, score) {
 function serializeMatch(match, myId) {
   const otherId = otherUserId(match, myId);
   const otherRow = db.findById('users', otherId);
+  const me = db.findById('users', myId);
   const matchMessages = db
     .filter('messages', (m) => m.matchId === match.id)
     .sort((x, y) => x.id - y.id);
@@ -76,7 +77,7 @@ function serializeMatch(match, myId) {
       answerMine: iAmA ? match.icebreakerAnswerA : match.icebreakerAnswerB,
       answerTheirs: iAmA ? match.icebreakerAnswerB : match.icebreakerAnswerA,
     },
-    otherUser: toPublicProfile(otherRow),
+    otherUser: toPublicProfile(otherRow, me),
     lastMessage: lastMessage
       ? {
           text: lastMessage.text,

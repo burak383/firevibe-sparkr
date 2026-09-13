@@ -147,11 +147,18 @@ const AUTH_LIMIT_PATHS = new Set([
 const authLimiter = createLimiter({ windowMs: 15 * 60 * 1000, max: 20 });
 const uploadLimiter = createLimiter({ windowMs: 15 * 60 * 1000, max: 60 });
 const generalLimiter = createLimiter({ windowMs: 5 * 60 * 1000, max: 600 });
+// Same idea as authLimiter above but for the admin Basic Auth surface
+// (dashboard, backup download, and every /admin/api/* action) - without this,
+// ADMIN_SECRET could be brute-forced with unlimited guesses per IP.
+const adminLimiter = createLimiter({ windowMs: 15 * 60 * 1000, max: 30 });
 
 function checkRateLimit(req, pathname) {
   const ip = clientIp(req);
   if (AUTH_LIMIT_PATHS.has(pathname)) return authLimiter(`auth:${ip}`);
   if (pathname === '/api/uploads') return uploadLimiter(`upload:${ip}`);
+  if (pathname === '/admin' || pathname === '/admin/backup' || pathname.startsWith('/admin/api/')) {
+    return adminLimiter(`admin:${ip}`);
+  }
   if (pathname.startsWith('/api/')) return generalLimiter(`general:${ip}`);
   return { allowed: true, retryAfterSec: 0 };
 }
@@ -201,6 +208,15 @@ const server = http.createServer(async (req, res) => {
     return serveLegalDoc(res, LEGAL_DOCS[pathname]);
   }
 
+  // Rate limit BEFORE the /admin* checks below (and before the routeTable
+  // loop further down, which handles /admin/api/*) - otherwise ADMIN_SECRET
+  // could be guessed with unlimited attempts per IP. See adminLimiter above.
+  const limit = checkRateLimit(req, pathname);
+  if (!limit.allowed) {
+    res.setHeader('Retry-After', String(limit.retryAfterSec));
+    return res.status(429).json({ error: 'Çok fazla istek gönderildi. Biraz sonra tekrar dene.' });
+  }
+
   if (req.method === 'GET' && pathname === '/admin') {
     if (!requireAdmin(req, res)) return;
     return serveAdminDashboard(res);
@@ -209,12 +225,6 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/admin/backup') {
     if (!requireAdmin(req, res)) return;
     return serveDbBackup(res);
-  }
-
-  const limit = checkRateLimit(req, pathname);
-  if (!limit.allowed) {
-    res.setHeader('Retry-After', String(limit.retryAfterSec));
-    return res.status(429).json({ error: 'Çok fazla istek gönderildi. Biraz sonra tekrar dene.' });
   }
 
   const started = Date.now();
