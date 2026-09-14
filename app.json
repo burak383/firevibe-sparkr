@@ -57,7 +57,12 @@
       ],
       "expo-notifications",
       "expo-apple-authentication",
-      "@react-native-google-signin/google-signin"
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.211227750901-5keb1318lv42mg8512clvchgbspgpnns"
+        }
+      ]
     ],
     "extra": {
       "eas": {

@@ -62,6 +62,7 @@ const LEGAL_DIR = path.join(__dirname, '..', 'legal');
 const LEGAL_DOCS = {
   '/privacy-policy': 'privacy-policy.html',
   '/terms': 'terms-of-service.html',
+  '/support': 'support.html',
 };
 function serveLegalDoc(res, filename) {
   fs.readFile(path.join(LEGAL_DIR, filename), 'utf8', (err, html) => {

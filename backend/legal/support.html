@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SparkR Destek</title>
+<style>
+  :root {
+    --bg: #FBF9F6;
+    --surface: #FFFFFF;
+    --surface-2: #F3EEEA;
+    --text: #201A22;
+    --text-muted: #6B6272;
+    --border: #E7E0E3;
+    --accent: #E0551A;
+    --accent-2: #6E52D9;
+    --accent-2-soft: #EFEAFB;
+    --accent-soft: #FDEBE0;
+    --rule: #EAE3E6;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0B0B10;
+      --surface: #15121A;
+      --surface-2: #1C1720;
+      --text: #FFF7F2;
+      --text-muted: #C8BBC7;
+      --border: #362C39;
+      --accent: #FF7A3D;
+      --accent-2: #9C86EE;
+      --accent-2-soft: #241E3A;
+      --accent-soft: #2E1B12;
+      --rule: #2A222D;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0B0B10;
+    --surface: #15121A;
+    --surface-2: #1C1720;
+    --text: #FFF7F2;
+    --text-muted: #C8BBC7;
+    --border: #362C39;
+    --accent: #FF7A3D;
+    --accent-2: #9C86EE;
+    --accent-2-soft: #241E3A;
+    --accent-soft: #2E1B12;
+    --rule: #2A222D;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2 {
+    font-family: 'Space Grotesk', 'Manrope', sans-serif;
+    text-wrap: balance;
+  }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  header.top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+
+  .mark {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--accent);
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1A0B07;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 19px;
+  }
+
+  .brand {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: 0.2px;
+  }
+
+  h1.title {
+    font-size: clamp(28px, 4.5vw, 38px);
+    font-weight: 700;
+    margin: 22px 0 6px;
+  }
+
+  .meta {
+    color: var(--text-muted);
+    font-size: 14.5px;
+    margin: 0 0 36px;
+    max-width: 60ch;
+  }
+
+  .contact-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 22px 24px;
+    margin-bottom: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .contact-card .label {
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 0 0 8px;
+  }
+
+  .contact-card .email {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 19px;
+  }
+
+  .contact-card a.email { color: var(--text); text-decoration: none; }
+  .contact-card a.email:hover { color: var(--accent); }
+
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: #1A0B07;
+    font-weight: 700;
+    font-size: 14px;
+    text-decoration: none;
+    padding: 12px 20px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  section.clause {
+    padding: 28px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  section.clause:first-of-type { border-top: none; padding-top: 0; }
+
+  h2.clause-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 10px;
+  }
+
+  .clause p {
+    margin: 0 0 10px;
+    max-width: 66ch;
+    color: var(--text);
+  }
+
+  .clause p:last-child { margin-bottom: 0; }
+  .clause p.muted { color: var(--text-muted); font-size: 14.5px; }
+  .clause a { color: var(--accent-2); }
+
+  footer.links {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-size: 14px;
+  }
+
+  footer.links a { color: var(--text-muted); text-decoration: none; }
+  footer.links a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="mark">S</div>
+    <div class="brand">SparkR</div>
+  </header>
+
+  <h1 class="title">Destek</h1>
+  <p class="meta">Bir sorun mu yaşıyorsun, bir öneri mi iletmek istiyorsun ya da hesabınla ilgili yardıma mı ihtiyacın var? Aşağıdaki adresten bize ulaşabilirsin, 2 iş günü içinde dönüş yapıyoruz.</p>
+
+  <div class="contact-card">
+    <div>
+      <p class="label">E-posta ile destek</p>
+      <a class="email" href="mailto:seolen8@gmail.com">seolen8@gmail.com</a>
+    </div>
+    <a class="btn" href="mailto:seolen8@gmail.com">Mesaj gönder</a>
+  </div>
+
+  <section class="clause">
+    <h2 class="clause-title">Hesap ve giriş sorunları</h2>
+    <p>Giriş yapamıyorsan, e-posta/telefon numaranı ve (varsa) hangi yöntemle kayıt olduğunu (Google, Apple ya da e-posta) belirterek bize yaz. Hesabını en kısa sürede kontrol ediyoruz.</p>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title">Abonelik ve satın alımlar</h2>
+    <p>Premium abonelik, Boost veya Süper Vibe paketleriyle ilgili bir sorun yaşarsan (App Store üzerinden yapılan) satın alma tarihini ve varsa makbuz/işlem numarasını e-postana ekle. İade talepleri Apple'ın kendi politikaları çerçevesinde işlenir; App Store hesabın üzerinden de talep açabilirsin.</p>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title">Şikayet ve güvenlik bildirimi</h2>
+    <p>Uygulama içindeki bir profil, mesaj veya kullanıcı davranışıyla ilgili şikayetini doğrudan uygulama içindeki şikayet/engelleme özelliklerinden iletebilirsin; acil güvenlik konuları için bu adresten de yazabilirsin.</p>
+  </section>
+
+  <section class="clause">
+    <h2 class="clause-title">Hesap silme</h2>
+    <p>Hesabını ve verilerini kalıcı olarak silmek istersen, uygulama içinde Ayarlar → Güvenlik Merkezi bölümünden talepte bulunabilir ya da bu adrese yazabilirsin.</p>
+  </section>
+
+  <footer class="links">
+    <a href="/privacy-policy">Gizlilik Politikası</a>
+    <a href="/terms">Kullanım Koşulları</a>
+  </footer>
+</div>
+</body>
+</html>

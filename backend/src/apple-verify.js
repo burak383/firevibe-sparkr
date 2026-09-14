@@ -3,20 +3,21 @@
 // at Apple's own JWKS endpoint and issuer/audience instead of Google's. This
 // is what `apple-signin-auth`/`verify-apple-id-token` do under the hood.
 //
-// SETUP (not something I can do from here - needs your own Apple Developer
-// account, which you don't have yet per earlier notes on this project):
-//   1. Enable "Sign in with Apple" as a capability on your app's identifier
-//      in the Apple Developer portal (Certificates, Identifiers & Profiles).
-//   2. `expectedAudience` below should be your app's bundle identifier (e.g.
-//      com.sparkr.app) for a native iOS sign-in - that's what ends up in the
-//      identity token's `aud` claim from `expo-apple-authentication`.
+// SETUP (needs an active Apple Developer Program membership - see
+// backend/.env.example's APPLE_CLIENT_ID for the full checklist):
+//   1. Enable "Sign in with Apple" as a capability on the app's identifier
+//      (app.firevibe.sparkr) in the Apple Developer portal (Certificates,
+//      Identifiers & Profiles).
+//   2. `expectedAudience` below is the app's bundle identifier
+//      (app.firevibe.sparkr, see mobile/app.json's ios.bundleIdentifier) for
+//      a native iOS sign-in - that's what ends up in the identity token's
+//      `aud` claim from `expo-apple-authentication`.
 //   3. Set APPLE_CLIENT_ID in this backend's env to that same bundle id.
 //
-// CANNOT BE TESTED FROM THIS SANDBOX, AND WON'T RUN WITHOUT A REAL APPLE
-// DEVELOPER ACCOUNT + A REAL iOS DEVICE/SIMULATOR: Sign in with Apple can
-// only be triggered from a real device signed into iCloud (or the iOS
-// Simulator on a Mac), never from this sandbox or from Expo Go. The parsing
-// below follows Apple's documented token format
+// CANNOT BE TESTED FROM THIS SANDBOX: Sign in with Apple can only be
+// triggered from a real device signed into iCloud (or the iOS Simulator on a
+// Mac), never from this sandbox or from Expo Go. The parsing below follows
+// Apple's documented token format
 // (https://developer.apple.com/documentation/sign_in_with_apple/generate_and_validate_tokens)
 // as closely as possible, but treat it as unverified until tried for real.
 const https = require('https');

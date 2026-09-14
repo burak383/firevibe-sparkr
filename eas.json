@@ -14,7 +14,9 @@
         "EXPO_PUBLIC_API_URL": "https://firevibe-sparkr-backend.onrender.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "211227750901-9eigstneqcdtgbnlt3olsc95jehrm7uc.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "211227750901-42g198fgro91nglu7ikecj0vubucovkv.apps.googleusercontent.com",
-        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_nRvegaCwYWGJjvidcZCBvMInnRm"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "211227750901-5keb1318lv42mg8512clvchgbspgpnns.apps.googleusercontent.com",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_nRvegaCwYWGJjvidcZCBvMInnRm",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_fkYACZhNDgSwXTcGFkYLtGuIifK"
       }
     },
     "production": {
@@ -23,7 +25,9 @@
         "EXPO_PUBLIC_API_URL": "https://firevibe-sparkr-backend.onrender.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "211227750901-9eigstneqcdtgbnlt3olsc95jehrm7uc.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "211227750901-42g198fgro91nglu7ikecj0vubucovkv.apps.googleusercontent.com",
-        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_nRvegaCwYWGJjvidcZCBvMInnRm"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "211227750901-5keb1318lv42mg8512clvchgbspgpnns.apps.googleusercontent.com",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_nRvegaCwYWGJjvidcZCBvMInnRm",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_fkYACZhNDgSwXTcGFkYLtGuIifK"
       }
     }
   },
