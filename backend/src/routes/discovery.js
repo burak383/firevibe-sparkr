@@ -27,14 +27,15 @@ routes.push({
     // birth date - see routes/auth.js) is kept rather than excluded, since
     // "unknown" shouldn't be treated as "outside the range".
     //
-    // HONEST LIMITATION: `distanceKm` isn't a real GPS-computed distance for
-    // real users - see routes/auth.js, where every real signup gets a fixed
-    // `distanceKm: 0` that's never recalculated (the app only ever stores a
-    // reverse-geocoded city/neighbourhood string, never coordinates - see
-    // mobile/src/utils/location.ts). So this filter is fully real between
-    // real users only once real distance tracking exists; today it mainly
-    // does something for the 5 seeded demo bots, which do have fixed
-    // per-bot distances (see seed.js).
+    // NOTE: the radius FILTER and sort below still compare the static
+    // per-row `distanceKm` field (0 for every real signup - see
+    // routes/auth.js - vs a fixed per-bot value for the 5 seed bots, see
+    // seed.js), not a real GPS distance, so `discoveryRadiusKm` doesn't
+    // actually exclude anyone real yet. The DISPLAYED distance below is
+    // fixed (passes `me` into toPublicProfile so serialize.js's
+    // resolveDistanceKm computes a real haversine distance whenever both
+    // people have saved GPS coordinates - see geo.js), but making the
+    // filter/sort real too is a separate follow-up.
     const ageMin = me.ageRangeMin ?? 18;
     const ageMax = me.ageRangeMax ?? 50;
     const radiusKm = me.discoveryRadiusKm ?? 12;
@@ -62,7 +63,7 @@ routes.push({
         return (a.distanceKm ?? 0) - (b.distanceKm ?? 0);
       })
       .slice(0, 20)
-      .map((row) => ({ ...toPublicProfile(row), compatibility: compatibility(me, row) }));
+      .map((row) => ({ ...toPublicProfile(row, me), compatibility: compatibility(me, row) }));
 
     res.json({ deck });
   },
@@ -210,7 +211,7 @@ routes.push({
 
     const target = db.findById('users', last.targetUserId);
     res.json({
-      profile: target ? { ...toPublicProfile(target), compatibility: compatibility(me, target) } : null,
+      profile: target ? { ...toPublicProfile(target, me), compatibility: compatibility(me, target) } : null,
     });
   },
 });
@@ -237,7 +238,7 @@ routes.push({
         const row = db.findById('users', v.viewerId);
         if (!row || row.visible === false) return null;
         return {
-          ...toPublicProfile(row),
+          ...toPublicProfile(row, me),
           compatibility: compatibility(me, row),
           viewedAt: v.viewedAt,
         };
@@ -281,7 +282,7 @@ routes.push({
         const row = db.findById('users', s.userId);
         if (!row || row.visible === false) return null;
         return {
-          ...toPublicProfile(row),
+          ...toPublicProfile(row, me),
           compatibility: compatibility(me, row),
           superlike: s.action === 'superlike',
           likedAt: s.createdAt,
@@ -322,7 +323,7 @@ routes.push({
         const row = db.findById('users', s.targetUserId);
         if (!row) return null;
         return {
-          ...toPublicProfile(row),
+          ...toPublicProfile(row, me),
           compatibility: compatibility(me, row),
           superlike: s.action === 'superlike',
           likedAt: s.createdAt,
