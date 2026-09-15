@@ -6,10 +6,16 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview": {
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://firevibe-sparkr-backend.onrender.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "211227750901-9eigstneqcdtgbnlt3olsc95jehrm7uc.apps.googleusercontent.com",
@@ -21,6 +27,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://firevibe-sparkr-backend.onrender.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "211227750901-9eigstneqcdtgbnlt3olsc95jehrm7uc.apps.googleusercontent.com",
