@@ -167,15 +167,19 @@ export const api = {
 
   unmatch: (id: number) => request<{ ok: boolean }>(`/api/matches/${id}`, { method: 'DELETE' }),
 
+  // "Buluştun mu?" - see Match.showMetPrompt/metAnswer.
+  metFeedback: (matchId: number, met: boolean) =>
+    request<{ match: Match }>(`/api/matches/${matchId}/met-feedback`, { method: 'POST', body: { met } }),
+
   messages: (matchId: number, afterId?: number) =>
     request<{ messages: Message[]; myUserId: number; otherTyping: boolean }>(
       `/api/matches/${matchId}/messages${afterId ? `?afterId=${afterId}` : ''}`
     ),
 
-  sendMessage: (matchId: number, text: string, imageUrl?: string) =>
+  sendMessage: (matchId: number, text: string, imageUrl?: string, audioUrl?: string) =>
     request<{ message: Message }>(`/api/matches/${matchId}/messages`, {
       method: 'POST',
-      body: { text, imageUrl },
+      body: { text, imageUrl, audioUrl },
     }),
 
   nearby: () => request<{ nearby: PublicProfile[]; activeCount: number }>('/api/radar/nearby'),

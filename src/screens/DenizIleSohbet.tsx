@@ -15,13 +15,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+// expo-av is deprecated (since SDK 53) and will be fully removed in SDK 55 -
+// this project is on SDK 54, its last supported release. Before upgrading
+// past SDK 54, this recording code needs to move to expo-audio (see the
+// same note where this pattern originates in VibeKurulumu.tsx/Profil.tsx).
+import { Audio } from 'expo-av';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { api, ApiError } from '../api/client';
-import { pickAndUploadImage } from '../utils/media';
+import { pickAndUploadImage, uploadRecordingUri } from '../utils/media';
 import { isOnline, presenceLabel } from '../utils/presence';
 import type { Match, Message } from '../api/types';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -69,6 +74,33 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 }
 
+// "X sa Y dk kaldı" for the Fire Hour expiring-match countdown - see
+// backend/src/matching.js's FIRE_HOUR_MATCH_TTL_MS.
+function formatCountdown(expiresAt: string): string {
+  const diffMs = new Date(expiresAt).getTime() - Date.now();
+  if (diffMs <= 0) return 'birazdan';
+  const hours = Math.floor(diffMs / 3600000);
+  const mins = Math.floor((diffMs % 3600000) / 60000);
+  return hours > 0 ? `${hours} sa ${mins} dk` : `${mins} dk`;
+}
+
+// Compact decorative waveform for voice message bubbles - same idea as the
+// bigger one in VibeKurulumu.tsx/Profil.tsx, just narrower to fit a bubble.
+const VOICE_WAVE_HEIGHTS = [5, 11, 16, 9, 19, 13, 7, 17, 10, 6, 14, 8];
+const VoiceWaveform = ({ outgoing }: { outgoing: boolean }) => (
+  <View style={styles.voiceWaveform} accessibilityLabel="Ses dalgası">
+    {VOICE_WAVE_HEIGHTS.map((height, index) => (
+      <View
+        key={index}
+        style={[
+          styles.voiceWaveBar,
+          { height, backgroundColor: outgoing ? colors.primaryForeground : colors.secondary },
+        ]}
+      />
+    ))}
+  </View>
+);
+
 export default function DenizChatScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'Chat'>>();
@@ -85,8 +117,28 @@ export default function DenizChatScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Voice message recording/playback - same expo-av pattern as the profile
+  // voice note (Profil.tsx), except playback tracks WHICH message is
+  // playing (playingMessageId) since a chat can have many voice bubbles,
+  // not just one.
+  const [isRecording, setIsRecording] = useState(false);
+  const [uploadingVoice, setUploadingVoice] = useState(false);
+  const [playingMessageId, setPlayingMessageId] = useState<number | null>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  // "Buluştun mu?" feedback - see Match.showMetPrompt/metAnswer.
+  const [submittingMet, setSubmittingMet] = useState(false);
+
   const scrollRef = useRef<ScrollView>(null);
   const lastMessageIdRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
+      soundRef.current?.unloadAsync().catch(() => {});
+    };
+  }, []);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -160,6 +212,101 @@ export default function DenizChatScreen() {
       Alert.alert('Hata', err instanceof ApiError ? err.message : 'Fotoğraf gönderilemedi, tekrar dene.');
     } finally {
       setSendingImage(false);
+    }
+  };
+
+  const startVoiceRecording = async () => {
+    if (isRecording || uploadingVoice) return;
+    // Recording and playback can't run at once - stop whatever's currently
+    // playing before opening the mic.
+    if (soundRef.current) {
+      await soundRef.current.stopAsync().catch(() => {});
+      await soundRef.current.unloadAsync().catch(() => {});
+      soundRef.current = null;
+      setPlayingMessageId(null);
+    }
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('İzin gerekli', 'Sesli mesaj göndermek için mikrofon iznine ihtiyacımız var.');
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      recordingRef.current = recording;
+      setIsRecording(true);
+    } catch {
+      Alert.alert('Hata', 'Kayıt başlatılamadı. Mikrofon iznini kontrol et.');
+    }
+  };
+
+  const cancelVoiceRecording = async () => {
+    const recording = recordingRef.current;
+    recordingRef.current = null;
+    setIsRecording(false);
+    if (recording) {
+      await recording.stopAndUnloadAsync().catch(() => {});
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false }).catch(() => {});
+    }
+  };
+
+  const sendVoiceRecording = async () => {
+    const recording = recordingRef.current;
+    if (!recording) return;
+    recordingRef.current = null;
+    setIsRecording(false);
+    setUploadingVoice(true);
+    try {
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = recording.getURI();
+      if (!uri) return;
+      const url = await uploadRecordingUri(uri);
+      await api.sendMessage(matchId, '', undefined, url);
+      setError(null);
+      await fetchMessages();
+    } catch (err) {
+      Alert.alert('Hata', err instanceof ApiError ? err.message : 'Sesli mesaj gönderilemedi, tekrar dene.');
+    } finally {
+      setUploadingVoice(false);
+    }
+  };
+
+  const toggleVoicePlayback = async (message: Message) => {
+    if (!message.audioUrl) return;
+    if (playingMessageId === message.id) {
+      await soundRef.current?.stopAsync().catch(() => {});
+      await soundRef.current?.unloadAsync().catch(() => {});
+      soundRef.current = null;
+      setPlayingMessageId(null);
+      return;
+    }
+    try {
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+      const { sound } = await Audio.Sound.createAsync({ uri: message.audioUrl }, { shouldPlay: true });
+      soundRef.current = sound;
+      setPlayingMessageId(message.id);
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) setPlayingMessageId(null);
+      });
+    } catch {
+      Alert.alert('Hata', 'Sesli mesaj oynatılamadı.');
+    }
+  };
+
+  const handleMetFeedback = async (met: boolean) => {
+    if (submittingMet) return;
+    setSubmittingMet(true);
+    try {
+      const res = await api.metFeedback(matchId, met);
+      setMatch(res.match);
+    } catch (err) {
+      Alert.alert('Hata', err instanceof ApiError ? err.message : 'Gönderilemedi, tekrar dene.');
+    } finally {
+      setSubmittingMet(false);
     }
   };
 
@@ -324,6 +471,15 @@ export default function DenizChatScreen() {
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         >
+          {match.fireHourMatch && match.expiresAt && messages.length === 0 && (
+            <View style={styles.expiryBanner}>
+              <Icon name="fire" size={16} color={colors.primary} />
+              <Text style={styles.expiryBannerText}>
+                Bu bir Fire Hour eşleşmesi - kimse yazmazsa {formatCountdown(match.expiresAt)} içinde düşer. İlk kıvılcımı çak!
+              </Text>
+            </View>
+          )}
+
           <View style={styles.dateDivider}>
             <View style={styles.divider} />
             <Text style={styles.dateLabel}>BU GECE · {(other.neighbourhood || other.city).toUpperCase()}</Text>
@@ -368,6 +524,38 @@ export default function DenizChatScreen() {
             </View>
           </LinearGradient>
 
+          {match.showMetPrompt && (
+            <View style={styles.metPromptCard}>
+              <View style={styles.metPromptIcon}>
+                <Icon name="map-marker-check-outline" size={18} color={colors.success} />
+              </View>
+              <View style={styles.metPromptBody}>
+                <Text style={styles.metPromptTitle}>{other.name} ile buluştun mu?</Text>
+                <Text style={styles.metPromptSubtitle}>Cevabın sadece eşleşme kalitesini iyileştirmemize yardımcı olur.</Text>
+                <View style={styles.metPromptActions}>
+                  <Pressable
+                    style={[styles.metPromptButton, styles.metPromptButtonYes]}
+                    onPress={() => handleMetFeedback(true)}
+                    disabled={submittingMet}
+                  >
+                    {submittingMet ? (
+                      <ActivityIndicator size="small" color={colors.successForeground} />
+                    ) : (
+                      <Text style={styles.metPromptButtonYesText}>Evet, buluştuk</Text>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    style={styles.metPromptButton}
+                    onPress={() => handleMetFeedback(false)}
+                    disabled={submittingMet}
+                  >
+                    <Text style={styles.metPromptButtonText}>Henüz değil</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          )}
+
           {messages.length === 0 && (
             <View style={styles.emptyState}>
               <Icon name="chat-outline" size={26} color={colors.mutedForeground} />
@@ -384,6 +572,22 @@ export default function DenizChatScreen() {
                   <Bubble outgoing={fromMe} style={message.imageUrl ? styles.imageBubble : undefined}>
                     {message.imageUrl ? (
                       <Image source={{ uri: message.imageUrl }} style={styles.messageImage} resizeMode="cover" />
+                    ) : null}
+                    {message.audioUrl ? (
+                      <Pressable
+                        style={styles.voiceMessageRow}
+                        accessibilityLabel={playingMessageId === message.id ? 'Sesli mesajı durdur' : 'Sesli mesajı oynat'}
+                        onPress={() => toggleVoicePlayback(message)}
+                      >
+                        <View style={[styles.voiceMessagePlayButton, fromMe && styles.voiceMessagePlayButtonOutgoing]}>
+                          <Icon
+                            name={playingMessageId === message.id ? 'pause' : 'play'}
+                            size={16}
+                            color={fromMe ? colors.primaryForeground : colors.secondaryForeground}
+                          />
+                        </View>
+                        <VoiceWaveform outgoing={fromMe} />
+                      </Pressable>
                     ) : null}
                     {message.text ? (
                       <Text style={fromMe ? styles.outgoingText : styles.messageText}>{message.text}</Text>
@@ -420,37 +624,71 @@ export default function DenizChatScreen() {
         </ScrollView>
 
         <View style={styles.composerDock}>
-          <View style={styles.composer}>
-            <Pressable
-              accessibilityLabel="Galeri"
-              style={styles.composerButton}
-              onPress={handleSendImage}
-              disabled={sendingImage}
-            >
-              {sendingImage ? (
-                <ActivityIndicator size="small" color={colors.mutedForeground} />
+          {isRecording ? (
+            <View style={styles.recordingComposer}>
+              <Pressable accessibilityLabel="Kaydı iptal et" style={styles.recordingCancelButton} onPress={cancelVoiceRecording}>
+                <Icon name="trash-can-outline" size={20} color={colors.destructive} />
+              </Pressable>
+              <View style={styles.recordingIndicator}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingText}>Kaydediliyor...</Text>
+              </View>
+              <Pressable accessibilityLabel="Sesli mesajı gönder" style={styles.recordingSendButton} onPress={sendVoiceRecording}>
+                <Icon name="send" size={18} color={colors.secondaryForeground} />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.composer}>
+              <Pressable
+                accessibilityLabel="Galeri"
+                style={styles.composerButton}
+                onPress={handleSendImage}
+                disabled={sendingImage}
+              >
+                {sendingImage ? (
+                  <ActivityIndicator size="small" color={colors.mutedForeground} />
+                ) : (
+                  <Icon name="image-plus" color={colors.mutedForeground} />
+                )}
+              </Pressable>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                placeholder="Bir şeyler yaz..."
+                placeholderTextColor={colors.mutedForeground}
+                style={styles.textInput}
+                multiline
+                onSubmitEditing={handleSend}
+              />
+              {text.trim() ? (
+                <Pressable
+                  accessibilityLabel="Gönder"
+                  style={[styles.sendButton, sending && styles.sendButtonDisabled]}
+                  onPress={handleSend}
+                  disabled={sending}
+                >
+                  {sending ? (
+                    <ActivityIndicator size="small" color={colors.secondaryForeground} />
+                  ) : (
+                    <Icon name="send" size={18} color={colors.secondaryForeground} />
+                  )}
+                </Pressable>
               ) : (
-                <Icon name="image-plus" color={colors.mutedForeground} />
+                <Pressable
+                  accessibilityLabel="Sesli mesaj kaydet"
+                  style={[styles.sendButton, uploadingVoice && styles.sendButtonDisabled]}
+                  onPress={startVoiceRecording}
+                  disabled={uploadingVoice}
+                >
+                  {uploadingVoice ? (
+                    <ActivityIndicator size="small" color={colors.secondaryForeground} />
+                  ) : (
+                    <Icon name="microphone" size={18} color={colors.secondaryForeground} />
+                  )}
+                </Pressable>
               )}
-            </Pressable>
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder="Bir şeyler yaz..."
-              placeholderTextColor={colors.mutedForeground}
-              style={styles.textInput}
-              multiline
-              onSubmitEditing={handleSend}
-            />
-            <Pressable
-              accessibilityLabel="Gönder"
-              style={[styles.sendButton, (!text.trim() || sending) && styles.sendButtonDisabled]}
-              onPress={handleSend}
-              disabled={!text.trim() || sending}
-            >
-              {sending ? <ActivityIndicator size="small" color={colors.secondaryForeground} /> : <Icon name="send" size={18} color={colors.secondaryForeground} />}
-            </Pressable>
-          </View>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -599,4 +837,88 @@ const styles = StyleSheet.create({
   },
   sendButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.secondary },
   sendButtonDisabled: { opacity: 0.5 },
+  recordingComposer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 8,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.destructive,
+    backgroundColor: colors.card,
+  },
+  recordingCancelButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.muted,
+  },
+  recordingIndicator: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 6 },
+  recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.destructive },
+  recordingText: { color: colors.destructive, fontFamily: fonts.body, fontSize: 13, fontWeight: '700' },
+  recordingSendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.secondary,
+  },
+  voiceMessageRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 160, paddingVertical: 2 },
+  voiceMessagePlayButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.secondary,
+  },
+  voiceMessagePlayButtonOutgoing: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  voiceWaveform: { flex: 1, height: 20, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  voiceWaveBar: { width: 3, borderRadius: 2 },
+  expiryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
+  },
+  expiryBannerText: { flex: 1, color: colors.cardForeground, fontFamily: fonts.body, fontSize: 12, fontWeight: '600', lineHeight: 17 },
+  metPromptCard: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.success,
+    backgroundColor: colors.card,
+  },
+  metPromptIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.muted,
+  },
+  metPromptBody: { flex: 1 },
+  metPromptTitle: { color: colors.cardForeground, fontFamily: fonts.heading, fontSize: 15, fontWeight: '700' },
+  metPromptSubtitle: { color: colors.mutedForeground, fontFamily: fonts.body, fontSize: 12, marginTop: 4, lineHeight: 17 },
+  metPromptActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  metPromptButton: {
+    flex: 1,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: colors.muted,
+  },
+  metPromptButtonYes: { backgroundColor: colors.success },
+  metPromptButtonText: { color: colors.mutedForeground, fontFamily: fonts.body, fontSize: 13, fontWeight: '700' },
+  metPromptButtonYesText: { color: colors.successForeground, fontFamily: fonts.body, fontSize: 13, fontWeight: '700' },
 });

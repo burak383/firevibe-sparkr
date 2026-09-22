@@ -140,10 +140,23 @@ export interface Match {
   lastMessage: {
     text: string | null;
     imageUrl: string | null;
+    audioUrl: string | null;
     createdAt: string;
     fromMe: boolean;
   } | null;
   createdAt: string;
+  // Fire Hour expiring-match mechanic (see backend/src/matching.js's
+  // FIRE_HOUR_MATCH_TTL_MS) - a match struck during Fire Hour that nobody
+  // ever replies to quietly disappears once `expiresAt` passes. `expiresAt`
+  // is null for a regular match, which never expires.
+  fireHourMatch: boolean;
+  expiresAt: string | null;
+  // "Did you meet?" feedback prompt (see backend/src/matching.js's
+  // MET_PROMPT_DELAY_MS/recordMetFeedback) - `showMetPrompt` is true once
+  // it's time to ask AND I haven't answered yet; `metAnswer` is my own past
+  // answer, if any (never the other person's).
+  showMetPrompt: boolean;
+  metAnswer: 'yes' | 'no' | null;
 }
 
 export interface Message {
@@ -152,6 +165,7 @@ export interface Message {
   senderId: number;
   text: string | null;
   imageUrl: string | null;
+  audioUrl: string | null;
   createdAt: string;
   // null until the recipient's chat screen has actually fetched this
   // message (see backend/src/routes/messages.js's GET handler) - drives the
