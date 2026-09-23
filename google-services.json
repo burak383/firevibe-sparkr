@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "50264949461",
+    "project_id": "uspulse",
+    "storage_bucket": "uspulse.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:50264949461:android:c895f3a7e062d2ea71585c",
+        "android_client_info": {
+          "package_name": "app.firevibe.sparkr"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "50264949461-gf01td1a3d5sum2c3vvjujnglvkc2q98.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZJ4vYUy0BqvGUMKloakK6VoMmODEn4qg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "50264949461-gf01td1a3d5sum2c3vvjujnglvkc2q98.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:50264949461:android:64b7b5eecaebad8d71585c",
+        "android_client_info": {
+          "package_name": "app.uspulse.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "50264949461-gf01td1a3d5sum2c3vvjujnglvkc2q98.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZJ4vYUy0BqvGUMKloakK6VoMmODEn4qg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "50264949461-gf01td1a3d5sum2c3vvjujnglvkc2q98.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
