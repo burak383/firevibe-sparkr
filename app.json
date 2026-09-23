@@ -24,6 +24,7 @@
     "android": {
       "package": "app.firevibe.sparkr",
       "versionCode": 12,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#0B0B10"
