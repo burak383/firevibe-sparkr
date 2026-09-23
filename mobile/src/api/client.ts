@@ -1,5 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { DeckUser, FireHour, Match, Message, PublicProfile, SuperlikeStatus, SwipeStatus, User } from './types';
+import type {
+  DeckUser,
+  FireHour,
+  LikeEntry,
+  Match,
+  Message,
+  ProfileViewEntry,
+  PublicProfile,
+  SuperlikeStatus,
+  SwipeStatus,
+  User,
+} from './types';
 
 // Point this at your backend. For a physical device or Android emulator,
 // `localhost` won't reach your computer - set EXPO_PUBLIC_API_URL in a `.env`
@@ -33,6 +44,25 @@ export class ApiError extends Error {
     this.name = 'ApiError';
     this.status = status;
   }
+}
+
+// Exact text of backend/src/auth.js's banned-account rejection (login,
+// Google, Apple, and requireAuth on every later request all use this same
+// string) - matched here to tell "your account was banned" apart from any
+// other unrelated 403 the API can return (e.g. trying to swipe on someone
+// you've blocked), which must NOT log the caller out.
+const BANNED_MESSAGE = 'Hesabın askıya alındı.';
+
+// AuthContext registers this on mount so a session that goes bad mid-use -
+// the token expired, or the account got banned while the app was already
+// open - drops the app back to the login screen instead of leaving every
+// screen stuck showing its own confusing error forever (the previous
+// behaviour: each screen's own try/catch just alerted the raw message and
+// nothing else ever changed, since nothing cleared the stored token or the
+// in-memory `user`).
+let onSessionInvalidated: (() => void) | null = null;
+export function setSessionInvalidatedHandler(handler: (() => void) | null): void {
+  onSessionInvalidated = handler;
 }
 
 interface RequestOptions {
@@ -78,6 +108,18 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     const message =
       (data && typeof data === 'object' && 'error' in data && (data as { error?: string }).error) ||
       'Bir şeyler ters gitti.';
+
+    // 401 always means the token itself is no longer valid (missing/expired/
+    // tampered - see requireAuth in backend/src/auth.js); this exact 403
+    // means the account was banned mid-session. Either way nothing else in
+    // the app can work until a fresh login, so clear the stored token and
+    // let AuthContext drop `user` back to null right away - RootNavigator
+    // then swaps back to the login stack on its own, same as a normal logout.
+    if (auth && (response.status === 401 || (response.status === 403 && message === BANNED_MESSAGE))) {
+      await setToken(null);
+      onSessionInvalidated?.();
+    }
+
     throw new ApiError(message, response.status);
   }
 
@@ -134,7 +176,23 @@ export const api = {
       }
     ),
 
+  // Undoes my own most recent swipe (any action), premium-only - see
+  // backend/src/routes/discovery.js. `profile` is the person to show again
+  // (re-inserted into the deck right where you were), or null if there was
+  // nothing to undo.
+  rewind: () => request<{ profile: DeckUser | null }>('/api/discovery/rewind', { method: 'POST' }),
+
   matches: () => request<{ matches: Match[] }>('/api/matches'),
+
+  // "Beğenenler" - `premium` says whether `likers` should render full
+  // (tappable/likeable) or locked (blurred, inert) - see Begeniler.tsx.
+  likesReceived: () => request<{ likers: LikeEntry[]; premium: boolean }>('/api/discovery/likes-received'),
+
+  // "Beğeniler" - always full/unlocked, see backend/src/routes/discovery.js.
+  likesSent: () => request<{ liked: LikeEntry[] }>('/api/discovery/likes-sent'),
+
+  // "Görüntüleyenler" - same premium-lock pattern as likesReceived.
+  profileViews: () => request<{ viewers: ProfileViewEntry[]; premium: boolean }>('/api/discovery/profile-views'),
 
   match: (id: number) => request<{ match: Match }>(`/api/matches/${id}`),
 
@@ -165,20 +223,6 @@ export const api = {
 
   uploadAudio: (dataUrl: string) => request<{ url: string }>('/api/uploads', { method: 'POST', body: { dataUrl } }),
 
-  requestSmsCode: (phone: string) =>
-    request<{ ok: boolean; message: string; devCode?: string }>('/api/auth/sms/request', {
-      method: 'POST',
-      body: { phone },
-      auth: false,
-    }),
-
-  verifySmsCode: (phone: string, code: string) =>
-    request<{ token: string; user: User }>('/api/auth/sms/verify', {
-      method: 'POST',
-      body: { phone, code },
-      auth: false,
-    }),
-
   googleLogin: (idToken: string) =>
     request<{ token: string; user: User }>('/api/auth/google', {
       method: 'POST',
@@ -186,10 +230,13 @@ export const api = {
       auth: false,
     }),
 
-  facebookLogin: (code: string, redirectUri: string) =>
-    request<{ token: string; user: User }>('/api/auth/facebook', {
+  // `fullName` is only ever present on someone's very first Apple sign-in
+  // (see utils/appleAuth.ts) - undefined on every later call, which the
+  // backend already expects (see routes/auth.js's POST /api/auth/apple).
+  appleLogin: (idToken: string, fullName?: string) =>
+    request<{ token: string; user: User }>('/api/auth/apple', {
       method: 'POST',
-      body: { code, redirectUri },
+      body: { idToken, fullName },
       auth: false,
     }),
 

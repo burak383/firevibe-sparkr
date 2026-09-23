@@ -255,7 +255,7 @@ export default function VibeRadarScreen() {
                   <Text style={styles.fireLabel}>FIRE HOUR</Text>
                 </View>
                 <Text style={styles.fireTitle}>{fireHourText}</Text>
-                <Text style={styles.mutedText}>{fireHour?.activeNearby ?? 46} yakın kişi aktif</Text>
+                <Text style={styles.mutedText}>{fireHour?.activeNearby ?? 0} yakın kişi aktif</Text>
               </View>
             </View>
             <View style={styles.fireAction}>
@@ -319,7 +319,10 @@ export default function VibeRadarScreen() {
                       </View>
                       <Text numberOfLines={1} style={styles.message}>
                         {match.lastMessage
-                          ? `${match.lastMessage.fromMe ? 'Sen: ' : ''}${match.lastMessage.text ?? 'Bir fotoğraf gönderdi'}`
+                          ? `${match.lastMessage.fromMe ? 'Sen: ' : ''}${
+                              match.lastMessage.text ??
+                              (match.lastMessage.audioUrl ? 'Bir sesli mesaj gönderdi 🎤' : 'Bir fotoğraf gönderdi')
+                            }`
                           : `Icebreaker: “${match.icebreaker.question}”`}
                       </Text>
                     </View>

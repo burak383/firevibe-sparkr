@@ -13,14 +13,17 @@
       "supportsTablet": true,
       "bundleIdentifier": "app.firevibe.sparkr",
       "usesAppleSignIn": true,
+      "buildNumber": "14",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Profil fotoğrafı ve galeri karesi eklemek için fotoğraflarına erişmemiz gerekiyor.",
         "NSMicrophoneUsageDescription": "Sesli Vibe kaydı yapabilmen için mikrofonuna erişmemiz gerekiyor.",
-        "NSLocationWhenInUseUsageDescription": "Profilindeki şehir/semt bilgisini otomatik doldurabilmemiz için konumuna erişmemiz gerekiyor."
+        "NSLocationWhenInUseUsageDescription": "Profilindeki şehir/semt bilgisini otomatik doldurabilmemiz için konumuna erişmemiz gerekiyor.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "app.firevibe.sparkr",
+      "versionCode": 12,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#0B0B10"

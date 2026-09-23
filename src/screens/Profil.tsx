@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+// expo-av is deprecated (since SDK 53) and will be fully removed in SDK 55 -
+// this project is on SDK 54, its last supported release. Before upgrading
+// past SDK 54, this recording code needs to move to expo-audio (see the same
+// note in VibeKurulumu.tsx, where this pattern originates).
+import { Audio } from 'expo-av';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,7 +26,7 @@ import type { RouteProp } from '@react-navigation/native';
 import { colors, fonts } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { api, ApiError } from '../api/client';
-import { pickAndUploadImage } from '../utils/media';
+import { pickAndUploadImage, uploadRecordingUri } from '../utils/media';
 import { detectCityFromLocation, LocationError } from '../utils/location';
 import { MUSIC_TAGS, VIBE_TAG_OPTIONS } from '../constants/tags';
 import RangeSlider from '../components/RangeSlider';
@@ -45,6 +50,17 @@ function Icon({
 function Section({ children, style }: { children: React.ReactNode; style?: object }) {
   return <View style={[styles.section, style]}>{children}</View>;
 }
+
+// Same 42-bar fake waveform used in VibeKurulumu.tsx's onboarding voice
+// recorder - purely decorative, but keeps the "Sesim" card visually
+// consistent with the first place users ever record a voice note.
+const Waveform = () => (
+  <View style={styles.waveform} accessibilityLabel="Ses dalgası">
+    {Array.from({ length: 42 }).map((_, index) => (
+      <View key={index} style={[styles.waveBar, { height: [5, 10, 17, 11, 21, 14, 8, 19, 12, 6][index % 10] }]} />
+    ))}
+  </View>
+);
 
 function SectionHeading({
   eyebrow,
@@ -123,6 +139,22 @@ export default function EditProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingField, setSavingField] = useState<string | null>(null);
+
+  // Voice note recording/playback state - same pattern as VibeKurulumu.tsx's
+  // onboarding recorder, so users can add or re-record their voice note from
+  // the profile screen at any time, not just during initial signup.
+  const [isRecording, setIsRecording] = useState(false);
+  const [uploadingVoice, setUploadingVoice] = useState(false);
+  const [isPlayingVoice, setIsPlayingVoice] = useState(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  useEffect(() => {
+    return () => {
+      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
+      soundRef.current?.unloadAsync().catch(() => {});
+    };
+  }, []);
 
   const [blockedListOpen, setBlockedListOpen] = useState(false);
   const [blockedList, setBlockedList] = useState<{ blockId: number; user: { id: number; name: string } }[]>([]);
@@ -228,6 +260,73 @@ export default function EditProfileScreen() {
       Alert.alert('Hata', err instanceof ApiError ? err.message : 'Fotoğraf yüklenemedi, tekrar dene.');
     } finally {
       setSavingField(null);
+    }
+  };
+
+  const startRecording = async () => {
+    if (isPlayingVoice) {
+      await soundRef.current?.stopAsync().catch(() => {});
+      await soundRef.current?.unloadAsync().catch(() => {});
+      soundRef.current = null;
+      setIsPlayingVoice(false);
+    }
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('İzin gerekli', 'Sesli Vibe kaydı için mikrofon iznine ihtiyacımız var.');
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      recordingRef.current = recording;
+      setIsRecording(true);
+    } catch {
+      Alert.alert('Hata', 'Kayıt başlatılamadı. Mikrofon iznini kontrol et.');
+    }
+  };
+
+  const stopRecording = async () => {
+    const recording = recordingRef.current;
+    if (!recording) return;
+    setIsRecording(false);
+    setUploadingVoice(true);
+    try {
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      recordingRef.current = null;
+      const uri = recording.getURI();
+      if (!uri) return;
+      const url = await uploadRecordingUri(uri);
+      await updateUser({ voiceNoteUrl: url });
+    } catch (err) {
+      Alert.alert('Hata', err instanceof ApiError ? err.message : 'Ses kaydı yüklenemedi, tekrar dene.');
+    } finally {
+      setUploadingVoice(false);
+    }
+  };
+
+  const togglePlayback = async () => {
+    if (!user.voiceNoteUrl) return;
+    if (isPlayingVoice) {
+      await soundRef.current?.stopAsync().catch(() => {});
+      await soundRef.current?.unloadAsync().catch(() => {});
+      soundRef.current = null;
+      setIsPlayingVoice(false);
+      return;
+    }
+    try {
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+      const { sound } = await Audio.Sound.createAsync({ uri: user.voiceNoteUrl }, { shouldPlay: true });
+      soundRef.current = sound;
+      setIsPlayingVoice(true);
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) setIsPlayingVoice(false);
+      });
+    } catch {
+      Alert.alert('Hata', 'Ses kaydı oynatılamadı.');
     }
   };
 
@@ -585,6 +684,53 @@ export default function EditProfileScreen() {
             </View>
           ) : (
             <Text style={styles.helperText}>Galerin boş. Birkaç fotoğraf eklemek eşleşme şansını artırır.</Text>
+          )}
+        </Section>
+
+        <Section>
+          <SectionHeading eyebrow="SESLİ VIBE" title="Sesim" icon="microphone-outline" />
+          <View style={styles.voiceCard}>
+            <View style={styles.voiceIcon}>
+              <Icon
+                name={isRecording ? 'record-circle' : 'waveform'}
+                size={19}
+                color={isRecording ? colors.destructive : colors.secondary}
+              />
+            </View>
+            <View style={styles.voiceContent}>
+              <Text style={styles.voiceTitle}>
+                {isRecording
+                  ? 'Kaydediliyor...'
+                  : uploadingVoice
+                  ? 'Yükleniyor...'
+                  : user.voiceNoteUrl
+                  ? 'Sesli Vibe’ın hazır'
+                  : 'Henüz sesli Vibe’ın yok'}
+              </Text>
+              <Waveform />
+            </View>
+            {uploadingVoice ? (
+              <View style={styles.playButton}>
+                <ActivityIndicator size="small" color={colors.secondaryForeground} />
+              </View>
+            ) : (
+              <Pressable
+                style={[styles.playButton, isRecording && styles.recordingButton]}
+                accessibilityLabel={isRecording ? 'Kaydı durdur' : user.voiceNoteUrl ? "Sesli Vibe'ı dinle" : 'Kayda başla'}
+                onPress={isRecording ? stopRecording : user.voiceNoteUrl ? togglePlayback : startRecording}
+              >
+                <Icon
+                  name={isRecording ? 'stop' : user.voiceNoteUrl ? (isPlayingVoice ? 'pause' : 'play') : 'microphone'}
+                  size={18}
+                  color={colors.secondaryForeground}
+                />
+              </Pressable>
+            )}
+          </View>
+          {user.voiceNoteUrl && !isRecording && !uploadingVoice && (
+            <Pressable onPress={startRecording} style={styles.reRecordLink}>
+              <Text style={styles.reRecordText}>Yeniden kaydet</Text>
+            </Pressable>
           )}
         </Section>
 
@@ -1267,6 +1413,65 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 12,
     marginTop: 12,
+  },
+  voiceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: colors.muted,
+  },
+  voiceIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.secondary,
+  },
+  voiceContent: {
+    flex: 1,
+  },
+  voiceTitle: {
+    color: colors.foreground,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  waveform: {
+    height: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 3,
+  },
+  waveBar: {
+    width: 2,
+    borderRadius: 2,
+    backgroundColor: colors.chart3,
+  },
+  playButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.secondary,
+  },
+  recordingButton: {
+    backgroundColor: colors.destructive,
+  },
+  reRecordLink: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  reRecordText: {
+    color: colors.primary,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    fontWeight: '800',
   },
   rangeCard: {
     marginTop: 16,

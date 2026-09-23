@@ -15,6 +15,7 @@ function serializeMessage(row) {
     senderId: row.senderId,
     text: row.text,
     imageUrl: row.imageUrl,
+    audioUrl: row.audioUrl,
     createdAt: row.createdAt,
     // null until the RECIPIENT's chat screen has fetched it (see the GET
     // handler below) - drives the "İletildi" (gray) vs "Okundu" (colored)
@@ -93,13 +94,15 @@ routes.push({
 
     const text = typeof body.text === 'string' ? body.text.trim() : '';
     const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl : '';
-    if (!text && !imageUrl) return res.status(400).json({ error: 'Mesaj boş olamaz' });
+    const audioUrl = typeof body.audioUrl === 'string' ? body.audioUrl : '';
+    if (!text && !imageUrl && !audioUrl) return res.status(400).json({ error: 'Mesaj boş olamaz' });
 
     // Text half of the same content-moderation pass as images/voice notes
     // (see ../moderation.js) - free to run (no external API), so it applies
     // even though only voice/image moderation was explicitly requested.
-    // Images sent as `imageUrl` were already checked at upload time in
-    // routes/uploads.js, before this endpoint ever sees the URL.
+    // Images/voice messages sent as `imageUrl`/`audioUrl` were already
+    // checked at upload time in routes/uploads.js (checkImageSafety /
+    // checkAudioSafety), before this endpoint ever sees the URL.
     if (text && containsBlockedText(text)) {
       return res.status(422).json({ error: 'Bu mesaj küfür veya cinsel içerik barındırdığı için gönderilemedi.' });
     }
@@ -109,6 +112,7 @@ routes.push({
       senderId: userId,
       text: text || null,
       imageUrl: imageUrl || null,
+      audioUrl: audioUrl || null,
     });
 
     const otherId = otherUserId(match, userId);
@@ -119,7 +123,7 @@ routes.push({
       typingState.set(match.id, { userId: other.id, until: Date.now() + 1600 });
       setTimeout(() => {
         const reply = BOT_REPLIES[Math.floor(Math.random() * BOT_REPLIES.length)];
-        db.insert('messages', { matchId: match.id, senderId: other.id, text: reply, imageUrl: null });
+        db.insert('messages', { matchId: match.id, senderId: other.id, text: reply, imageUrl: null, audioUrl: null });
         typingState.delete(match.id);
         // The bot "sent" this reply to the human - let them know if the app
         // isn't open, same as a real person's message would.
@@ -132,7 +136,7 @@ routes.push({
     } else if (other) {
       notifyUser(other.id, {
         title: sender ? sender.name : 'Yeni mesaj',
-        body: text || (imageUrl ? 'Bir fotoğraf gönderdi 📷' : 'Yeni mesaj'),
+        body: text || (imageUrl ? 'Bir fotoğraf gönderdi 📷' : audioUrl ? 'Bir sesli mesaj gönderdi 🎤' : 'Yeni mesaj'),
         data: { type: 'message', matchId: match.id },
       }).catch(() => {});
     }
