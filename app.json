@@ -13,7 +13,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "app.firevibe.sparkr",
       "usesAppleSignIn": true,
-      "buildNumber": "14",
+      "buildNumber": "15",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Profil fotoğrafı ve galeri karesi eklemek için fotoğraflarına erişmemiz gerekiyor.",
         "NSMicrophoneUsageDescription": "Sesli Vibe kaydı yapabilmen için mikrofonuna erişmemiz gerekiyor.",

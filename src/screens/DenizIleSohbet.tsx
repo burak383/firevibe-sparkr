@@ -286,14 +286,22 @@ export default function DenizChatScreen() {
         await soundRef.current.unloadAsync();
         soundRef.current = null;
       }
+      // Same reasoning as Profil.tsx's togglePlayback - explicitly switch
+      // back to playback mode rather than assuming the session is already
+      // out of recording mode.
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
       const { sound } = await Audio.Sound.createAsync({ uri: message.audioUrl }, { shouldPlay: true });
       soundRef.current = sound;
       setPlayingMessageId(message.id);
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) setPlayingMessageId(null);
       });
-    } catch {
-      Alert.alert('Hata', 'Sesli mesaj oynatılamadı.');
+    } catch (err) {
+      // Surface the real reason instead of one generic message for every
+      // failure mode - see Profil.tsx's togglePlayback for the same fix.
+      console.log('[Chat] voice playback failed:', err);
+      const detail = err instanceof Error ? err.message : String(err);
+      Alert.alert('Hata', `Sesli mesaj oynatılamadı.\n\n${detail}`);
     }
   };
 

@@ -319,14 +319,25 @@ export default function EditProfileScreen() {
         await soundRef.current.unloadAsync();
         soundRef.current = null;
       }
+      // Recording mode (allowsRecordingIOS: true, set in startRecording) can
+      // linger on iOS even after stopRecording() - explicitly switch back to
+      // playback mode before creating the Sound, rather than assuming the
+      // session is already in the right state.
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
       const { sound } = await Audio.Sound.createAsync({ uri: user.voiceNoteUrl }, { shouldPlay: true });
       soundRef.current = sound;
       setIsPlayingVoice(true);
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) setIsPlayingVoice(false);
       });
-    } catch {
-      Alert.alert('Hata', 'Ses kaydı oynatılamadı.');
+    } catch (err) {
+      // Surface the real reason (e.g. a 404 because the hosted file is
+      // gone, vs. a codec/session error) instead of a single generic
+      // message for every failure mode - this is a known trouble spot (see
+      // Render's UPLOAD_DIR persistence) and guessing blind wastes a round trip.
+      console.log('[Sesim] playback failed:', err);
+      const detail = err instanceof Error ? err.message : String(err);
+      Alert.alert('Hata', `Ses kaydı oynatılamadı.\n\n${detail}`);
     }
   };
 
